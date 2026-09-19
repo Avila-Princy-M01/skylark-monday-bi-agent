@@ -1,4 +1,3 @@
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { getLlmProviderChain, LlmProviderName } from "../config";
 
 /**
@@ -6,8 +5,7 @@ import { getLlmProviderChain, LlmProviderName } from "../config";
  *
  * The chain itself lives in `lib/config.ts` so there is a single source of
  * truth for environment variables. These helpers are thin adapters over it:
- * `getAvailableProviderChain` for hand-rolled HTTP calls (`lib/llm/client.ts`),
- * and `createLanguageModel` for the Vercel AI SDK path.
+ * `getAvailableProviderChain` for hand-rolled HTTP calls (`lib/llm/client.ts`).
  */
 
 export interface LLMProviderConfig {
@@ -30,18 +28,4 @@ export function getAvailableProviderChain(): LLMProviderConfig[] {
   });
 
   return chain;
-}
-
-export function createLanguageModel(config: LLMProviderConfig) {
-  if (config.providerName === "mock" || !config.baseURL) {
-    return null;
-  }
-
-  const provider = createOpenAICompatible({
-    name: config.providerName,
-    baseURL: config.baseURL,
-    headers: config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : undefined,
-  });
-
-  return provider(config.modelName);
 }
