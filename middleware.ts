@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkRateLimit } from "@/lib/security/rate-limiter";
-import { getClientIp, isPayloadTooLarge } from "@/lib/security/guard";
+import { checkRateLimitAsync } from "@/lib/security/rate-limiter";
+import { getClientIp, isPayloadTooLarge, verifySameOrigin } from "@/lib/security/guard";
 
 export const config = {
   matcher: ["/api/:path*"],
 };
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
   // 1. Enforce payload size limits before compute/body parsing
@@ -26,11 +26,30 @@ export function middleware(req: NextRequest) {
     );
   }
 
-  // 2. Client identification & sliding-window rate evaluation
-  const clientIp = getClientIp(req);
-  const rateLimit = checkRateLimit(clientIp, pathname);
+  // 2. CSRF / Origin check on state-modifying endpoints like /api/resync
+  if (req.method === "POST" && pathname === "/api/resync") {
+    if (!verifySameOrigin(req)) {
+      return NextResponse.json(
+        {
+          error: "Cross-site request forgery attempt blocked. Request origin not allowed.",
+          code: "CSRF_BLOCKED",
+        },
+        {
+          status: 403,
+          headers: {
+            "X-Content-Type-Options": "nosniff",
+            "X-Frame-Options": "DENY",
+          },
+        }
+      );
+    }
+  }
 
-  // 3. Reject if rate limit exceeded
+  // 3. Client identification & sliding-window rate evaluation (distributed or in-memory)
+  const clientIp = getClientIp(req);
+  const rateLimit = await checkRateLimitAsync(clientIp, pathname);
+
+  // 4. Reject if rate limit exceeded
   if (!rateLimit.allowed) {
     return NextResponse.json(
       {
@@ -45,6 +64,7 @@ export function middleware(req: NextRequest) {
           "X-RateLimit-Limit": String(rateLimit.limit),
           "X-RateLimit-Remaining": "0",
           "X-RateLimit-Reset": String(rateLimit.resetInSeconds),
+          "X-RateLimit-Source": rateLimit.source,
           "X-Content-Type-Options": "nosniff",
           "X-Frame-Options": "DENY",
         },
@@ -52,11 +72,12 @@ export function middleware(req: NextRequest) {
     );
   }
 
-  // 4. Continue with rate-limit and defensive security headers attached
+  // 5. Continue with rate-limit and defensive security headers attached
   const response = NextResponse.next();
   response.headers.set("X-RateLimit-Limit", String(rateLimit.limit));
   response.headers.set("X-RateLimit-Remaining", String(rateLimit.remaining));
   response.headers.set("X-RateLimit-Reset", String(rateLimit.resetInSeconds));
+  response.headers.set("X-RateLimit-Source", rateLimit.source);
 
   // Defense-in-depth security headers
   response.headers.set("X-Content-Type-Options", "nosniff");

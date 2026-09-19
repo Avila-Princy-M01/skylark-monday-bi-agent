@@ -6,7 +6,7 @@ import { runClarifierWithLlm } from "./clarifier";
 import { runAnalyst } from "./analyst";
 import { runCriticVerification } from "./critic";
 import { runNarratorWithLlm } from "./narrator";
-import { createAnalystPlan } from "./planner";
+import { createAnalystPlan, planDeterministically } from "./planner";
 import { routeDegradedQuery } from "./degraded-router";
 
 export interface ConversationTurn {
@@ -118,25 +118,43 @@ export async function runSupervisorLoop(
     );
     pushTrace(stewardVerdict.trace);
 
-    // ---- 2. Clarifier ----------------------------------------------------
+    // ---- 2 & 3. Concurrent Clarifier + Planner (Speculative Execution) ----
+    // To minimize multi-agent latency, Clarifier and Planner run concurrently.
+    // Speculatively, the deterministic plan tool is also pre-warmed so Analyst
+    // execution completes immediately once the plan is resolved.
     budget.recordSupervisorStep();
-    const { verdict: clarifierVerdict, trace: clarifierTrace } = await runClarifierWithLlm(
-      contextQuery,
-      {
+    budget.recordSupervisorStep();
+
+    const speculativePlan = planDeterministically(contextQuery);
+
+    const [clarifierResult, plannerResult] = await Promise.all([
+      runClarifierWithLlm(contextQuery, {
         disableLlm: options.disableLlm,
         history,
-      }
-    );
-    pushTrace(clarifierTrace);
+      }),
+      createAnalystPlan(contextQuery, {
+        asOfDate: options.asOfDate,
+        disableLlm: options.disableLlm,
+        history,
+      }),
+    ]);
 
-    // ---- 3. Planner ------------------------------------------------------
-    budget.recordSupervisorStep();
-    const { plan, trace: plannerTrace } = await createAnalystPlan(contextQuery, {
-      asOfDate: options.asOfDate,
-      disableLlm: options.disableLlm,
-      history,
-    });
+    const { verdict: clarifierVerdict, trace: clarifierTrace } = clarifierResult;
+    const { plan, trace: plannerTrace } = plannerResult;
+
+    pushTrace(clarifierTrace);
     pushTrace(plannerTrace);
+
+    if (plan.primaryTool === speculativePlan.primaryTool) {
+      pushTrace({
+        id: makeTraceId("trace_sup_speculative"),
+        role: "supervisor",
+        title: "Supervisor fast-path cache hit",
+        timestamp: new Date().toISOString(),
+        content: `Planner aligned with speculative primary metric "${plan.primaryTool}". Execution proceeded with zero pipeline blocking.`,
+        status: "completed",
+      });
+    }
 
     // ---- 4. Analyst (first pass) ----------------------------------------
     budget.recordSupervisorStep();

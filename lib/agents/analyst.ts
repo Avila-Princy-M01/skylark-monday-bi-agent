@@ -121,6 +121,10 @@ export async function runAnalyst(
         const res = await tools.get_stuck_money_analysis.execute({ asOfDate: asOf });
         return { factSheet: res.factSheet, isEmpty: false };
       }
+      case "get_temporal_trends": {
+        const res = await tools.get_temporal_trends.execute({ asOfDate: asOf });
+        return { factSheet: res.factSheet, isEmpty: res.trends.snapshotCount === 0 };
+      }
       default:
         return undefined;
     }

@@ -1,11 +1,11 @@
 /**
- * Security & authorization guard utilities for Skylark BI endpoints.
+ * Security, anti-spoofing, CSRF defense, and distributed locking for Skylark BI.
  */
 
 import { NextRequest } from "next/server";
 
 export const MAX_BODY_SIZE_BYTES = 16 * 1024; // 16 KB
-export const MAX_QUERY_LENGTH = 1500; // Increased to 1,500 chars for multi-sentence executive inquiries
+export const MAX_QUERY_LENGTH = 1500; // Multi-sentence executive inquiries supported
 
 // Standard IPv4 and IPv6 format validators
 const IPV4_REGEX = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
@@ -31,7 +31,7 @@ export function getClientIp(req: NextRequest): string {
     return cfIp.trim();
   }
 
-  // 3. Real IP header from reverse proxy
+  // 3. Real IP header from trusted reverse proxy
   const realIp = req.headers.get("x-real-ip");
   if (realIp && isValidIp(realIp.trim())) {
     return realIp.trim();
@@ -45,7 +45,6 @@ export function getClientIp(req: NextRequest): string {
       .map((s) => s.trim())
       .filter((s) => isValidIp(s));
     if (hops.length > 0) {
-      // Use the last hop (closest trusted reverse proxy client) or first
       return hops[hops.length - 1];
     }
   }
@@ -73,7 +72,6 @@ export function isPayloadTooLarge(req: NextRequest): boolean {
 export function isAuthorizedAdmin(req: NextRequest): boolean {
   const adminKey = process.env.ADMIN_API_KEY?.trim();
   if (!adminKey) {
-    // If no admin key configured, authorization is not enforced (demo fallback)
     return false;
   }
 
@@ -89,19 +87,79 @@ export function isAuthorizedAdmin(req: NextRequest): boolean {
   return false;
 }
 
-// Global mutex state for /api/resync to prevent parallel GraphQL complexity storms
+/**
+ * CSRF Defense: Verifies that mutation requests originate from the same origin.
+ * Excludes Bearer-authenticated API calls from CSRF checks.
+ */
+export function verifySameOrigin(req: NextRequest): boolean {
+  // If request carries valid admin bearer credentials, CSRF check is satisfied
+  if (isAuthorizedAdmin(req)) {
+    return true;
+  }
+
+  // Check Sec-Fetch-Site if provided by modern browsers
+  const secFetchSite = req.headers.get("sec-fetch-site");
+  if (secFetchSite === "cross-site") {
+    return false;
+  }
+
+  const origin = req.headers.get("origin");
+  const host = req.headers.get("host") || req.nextUrl.host;
+
+  if (origin) {
+    try {
+      const originHost = new URL(origin).host;
+      if (originHost !== host) {
+        return false;
+      }
+    } catch {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+// Global process mutex state for /api/resync
 let isResyncLocked = false;
 let resyncLockAcquiredAt = 0;
 const MAX_LOCK_TTL_MS = 60000; // 60s auto-release failsafe
 
 /**
  * Attempts to acquire an exclusive lock for resync execution.
+ * Supports distributed Redis SET NX if UPSTASH credentials exist,
+ * otherwise safely falls back to process mutex.
+ */
+export async function acquireDistributedResyncLock(): Promise<boolean> {
+  const upstashUrl = process.env.UPSTASH_REDIS_REST_URL?.trim();
+  const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+
+  if (upstashUrl && upstashToken) {
+    try {
+      const res = await fetch(`${upstashUrl}/set/resync_lock/1/NX/EX/60`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${upstashToken}` },
+        signal: AbortSignal.timeout(1500),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { result?: string };
+        return data.result === "OK";
+      }
+    } catch {
+      // Fall through to memory mutex on Redis network error
+    }
+  }
+
+  return acquireResyncLock();
+}
+
+/**
+ * In-memory process mutex lock.
  */
 export function acquireResyncLock(): boolean {
   const now = Date.now();
   if (isResyncLocked) {
     if (now - resyncLockAcquiredAt > MAX_LOCK_TTL_MS) {
-      // Auto-recover from an abandoned lock
       isResyncLocked = true;
       resyncLockAcquiredAt = now;
       return true;
@@ -114,7 +172,29 @@ export function acquireResyncLock(): boolean {
 }
 
 /**
- * Releases the exclusive resync lock.
+ * Releases the exclusive resync lock across Redis and process memory.
+ */
+export async function releaseDistributedResyncLock(): Promise<void> {
+  const upstashUrl = process.env.UPSTASH_REDIS_REST_URL?.trim();
+  const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+
+  if (upstashUrl && upstashToken) {
+    try {
+      await fetch(`${upstashUrl}/del/resync_lock`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${upstashToken}` },
+        signal: AbortSignal.timeout(1000),
+      });
+    } catch {
+      // Ignore cleanup error
+    }
+  }
+
+  releaseResyncLock();
+}
+
+/**
+ * Releases the process mutex.
  */
 export function releaseResyncLock(): void {
   isResyncLocked = false;

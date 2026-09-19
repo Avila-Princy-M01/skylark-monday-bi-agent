@@ -50,6 +50,7 @@ Available tools:
 - get_cross_board_scorecards: owner and sector scorecards joining both boards on owner code and sector.
 - get_concentration_risk: top client and owner share of pipeline and order book.
 - get_stuck_money_analysis: the conversion chain from won deals to unbilled backlog to uncollected receivables.
+- get_temporal_trends: historical velocity, pipeline shifts, collection efficiency trend, and delta metrics across synchronization snapshots.
 
 Sector vocabulary present in the data: Mining, Powerline, Renewables, Railways, DSP, Tender, Construction, Security and Surveillance, Aviation, Manufacturing, Others.
 Note: "energy" is not a stored sector. If the user says energy, return ["Renewables", "Powerline"].
@@ -77,7 +78,18 @@ export function planDeterministically(query: string): AnalystPlan {
   let primaryTool: MetricToolName = "get_pipeline_health";
   const supportingTools: MetricToolName[] = [];
 
-  if (q.includes("stalled") || q.includes("aging") || q.includes("overdue")) {
+  if (
+    q.includes("trend") ||
+    q.includes("velocity") ||
+    q.includes("trajectory") ||
+    q.includes("over time") ||
+    q.includes("historical") ||
+    q.includes("month over month") ||
+    q.includes("mom")
+  ) {
+    primaryTool = "get_temporal_trends";
+    supportingTools.push("get_pipeline_health", "get_collections_and_ar");
+  } else if (q.includes("stalled") || q.includes("aging") || q.includes("overdue")) {
     primaryTool = "get_stalled_deals";
     supportingTools.push("get_pipeline_health");
   } else if (q.includes("concentration") || q.includes("top client") || q.includes("client risk")) {

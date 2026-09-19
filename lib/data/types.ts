@@ -71,6 +71,7 @@ export interface DataQualityIssue {
     | "junk_row_dropped"
     | "empty_column_excluded"
     | "missing_column_in_schema"
+    | "schema_drift_warning"
     | "masked_placeholder_value"
     | "over_billed_negative"
     | "date_anomaly"

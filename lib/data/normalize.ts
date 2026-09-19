@@ -221,6 +221,7 @@ export interface RawMondayItem {
 export interface RequiredColumnDef {
   field: string;
   candidates: string[];
+  immutableIds?: string[];
   severity: "critical" | "warning";
 }
 
@@ -228,21 +229,25 @@ export const REQUIRED_DEALS_COLUMNS: RequiredColumnDef[] = [
   {
     field: "dealValue",
     candidates: ["Masked Deal value", "Deal value", "Deal Value", "numbers_val"],
+    immutableIds: ["numbers_val", "numbers", "numbers_1", "numeric_val"],
     severity: "critical",
   },
   {
     field: "status",
     candidates: ["Deal Status", "status_deal", "Deal status", "Status"],
+    immutableIds: ["status_deal", "status", "status_1"],
     severity: "critical",
   },
   {
     field: "tentativeCloseDate",
     candidates: ["Tentative Close Date", "Tentative close date", "date_close_t", "Close Date"],
+    immutableIds: ["date_close_t", "date4", "date_1", "date"],
     severity: "warning",
   },
   {
     field: "clientCode",
     candidates: ["Client Code", "Customer Name Code", "text_client", "Client"],
+    immutableIds: ["text_client", "text", "text_1"],
     severity: "warning",
   },
 ];
@@ -257,6 +262,7 @@ export const REQUIRED_WORK_ORDERS_COLUMNS: RequiredColumnDef[] = [
       "Amount (Excl. GST)",
       "numbers_order_excl",
     ],
+    immutableIds: ["numbers_order_excl", "numbers", "numbers_1"],
     severity: "critical",
   },
   {
@@ -268,6 +274,7 @@ export const REQUIRED_WORK_ORDERS_COLUMNS: RequiredColumnDef[] = [
       "Billed Amount (Excl. GST)",
       "numbers_billed_excl",
     ],
+    immutableIds: ["numbers_billed_excl", "numbers_2"],
     severity: "critical",
   },
   {
@@ -279,6 +286,7 @@ export const REQUIRED_WORK_ORDERS_COLUMNS: RequiredColumnDef[] = [
       "Collected Amount",
       "numbers_collected_incl",
     ],
+    immutableIds: ["numbers_collected_incl", "numbers_3"],
     severity: "critical",
   },
   {
@@ -289,16 +297,19 @@ export const REQUIRED_WORK_ORDERS_COLUMNS: RequiredColumnDef[] = [
       "Amount to be Billed",
       "numbers_tobe_billed",
     ],
+    immutableIds: ["numbers_tobe_billed", "numbers_4"],
     severity: "warning",
   },
   {
     field: "clientCode",
     candidates: ["Customer Name Code", "Client Code", "text_client", "Customer"],
+    immutableIds: ["text_client", "text", "text_1", "customer_name"],
     severity: "warning",
   },
   {
     field: "poDate",
     candidates: ["Date of PO/LOI", "PO Date", "PO/LOI Date", "date_po"],
+    immutableIds: ["date_po", "date_1", "date"],
     severity: "warning",
   },
 ];
@@ -307,8 +318,8 @@ export function findMissingRequiredColumns(
   requiredCols: RequiredColumnDef[],
   columnMap: Record<string, string>,
   sampleItems: RawMondayItem[]
-): { missing: RequiredColumnDef[]; present: string[] } {
-  if (sampleItems.length === 0) return { missing: [], present: [] };
+): { missing: RequiredColumnDef[]; present: string[]; driftWarnings: DataQualityIssue[] } {
+  if (sampleItems.length === 0) return { missing: [], present: [], driftWarnings: [] };
 
   const knownKeys = new Set<string>();
   for (const k of Object.keys(columnMap)) {
@@ -325,17 +336,31 @@ export function findMissingRequiredColumns(
 
   const missing: RequiredColumnDef[] = [];
   const present: string[] = [];
+  const driftWarnings: DataQualityIssue[] = [];
 
   for (const def of requiredCols) {
-    const isMatched = def.candidates.some((c) => knownKeys.has(c.trim().toLowerCase()));
-    if (isMatched) {
+    const isImmutableMatched = def.immutableIds?.some((id) =>
+      knownKeys.has(id.trim().toLowerCase())
+    );
+    const isCandidateMatched = def.candidates.some((c) => knownKeys.has(c.trim().toLowerCase()));
+
+    if (isImmutableMatched || isCandidateMatched) {
       present.push(def.field);
+      // If matched via secondary candidate and not immutable ID or primary candidate, flag drift warning
+      if (!isImmutableMatched && !knownKeys.has(def.candidates[0].trim().toLowerCase())) {
+        driftWarnings.push({
+          type: "schema_drift_warning",
+          board: def.field.startsWith("deal") || def.field === "status" ? "deals" : "work_orders",
+          description: `Schema drift warning: Field '${def.field}' resolved via fallback alias instead of primary column '${def.candidates[0]}'.`,
+          details: { field: def.field, primaryCandidate: def.candidates[0] },
+        });
+      }
     } else {
       missing.push(def);
     }
   }
 
-  return { missing, present };
+  return { missing, present, driftWarnings };
 }
 
 /**
@@ -368,6 +393,7 @@ export function normalizeDeals(
       details: { field: miss.field, candidates: miss.candidates, severity: miss.severity },
     });
   }
+  issues.push(...missingColsResult.driftWarnings);
 
   for (const item of rawItems) {
     const colDict: Record<string, string | null> = {};
@@ -377,9 +403,27 @@ export function normalizeDeals(
       }
     }
 
-    const getVal = (colName: string): string | null => {
+    const getVal = (colName: string, immutableIds: string[] = []): string | null => {
+      for (const immId of immutableIds) {
+        if (colDict[immId] !== undefined && colDict[immId] !== null) {
+          return colDict[immId];
+        }
+      }
       const colId = columnMap[colName] || colName;
-      return colDict[colId] ?? null;
+      if (colDict[colId] !== undefined && colDict[colId] !== null) {
+        return colDict[colId];
+      }
+      const lowerKey = Object.keys(columnMap).find(
+        (k) => k.toLowerCase().trim() === colName.toLowerCase().trim()
+      );
+      if (
+        lowerKey &&
+        colDict[columnMap[lowerKey]] !== undefined &&
+        colDict[columnMap[lowerKey]] !== null
+      ) {
+        return colDict[columnMap[lowerKey]];
+      }
+      return null;
     };
 
     const rawName = item.name || "";
@@ -560,6 +604,7 @@ export function normalizeWorkOrders(
       details: { field: miss.field, candidates: miss.candidates, severity: miss.severity },
     });
   }
+  issues.push(...missingColsResult.driftWarnings);
 
   const seenHashes = new Set<string>();
 
@@ -571,9 +616,27 @@ export function normalizeWorkOrders(
       }
     }
 
-    const getVal = (colName: string): string | null => {
+    const getVal = (colName: string, immutableIds: string[] = []): string | null => {
+      for (const immId of immutableIds) {
+        if (colDict[immId] !== undefined && colDict[immId] !== null) {
+          return colDict[immId];
+        }
+      }
       const colId = columnMap[colName] || colName;
-      return colDict[colId] ?? null;
+      if (colDict[colId] !== undefined && colDict[colId] !== null) {
+        return colDict[colId];
+      }
+      const lowerKey = Object.keys(columnMap).find(
+        (k) => k.toLowerCase().trim() === colName.toLowerCase().trim()
+      );
+      if (
+        lowerKey &&
+        colDict[columnMap[lowerKey]] !== undefined &&
+        colDict[columnMap[lowerKey]] !== null
+      ) {
+        return colDict[columnMap[lowerKey]];
+      }
+      return null;
     };
 
     const rawWoNum = item.name || getVal("Work Order Number") || "";

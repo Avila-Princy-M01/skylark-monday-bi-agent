@@ -144,5 +144,68 @@ describe("Enterprise In-App Security & Rate Limiting", () => {
       expect(acquireResyncLock()).toBe(true);
       releaseResyncLock();
     });
+
+    it("distributed lock works with acquireDistributedResyncLock and releaseDistributedResyncLock", async () => {
+      const { acquireDistributedResyncLock, releaseDistributedResyncLock } =
+        await import("@/lib/security/guard");
+      const lock1 = await acquireDistributedResyncLock();
+      expect(lock1).toBe(true);
+
+      const lock2 = await acquireDistributedResyncLock();
+      expect(lock2).toBe(false);
+
+      await releaseDistributedResyncLock();
+      const lock3 = await acquireDistributedResyncLock();
+      expect(lock3).toBe(true);
+      await releaseDistributedResyncLock();
+    });
+  });
+
+  describe("CSRF & Origin Verification Guard", () => {
+    it("allows same-origin requests matching host header", async () => {
+      const { verifySameOrigin } = await import("@/lib/security/guard");
+      const req = new NextRequest("http://app.internal/api/resync", {
+        headers: {
+          host: "app.internal",
+          origin: "http://app.internal",
+        },
+      });
+      expect(verifySameOrigin(req)).toBe(true);
+    });
+
+    it("rejects cross-site origin requests attempting state mutations", async () => {
+      const { verifySameOrigin } = await import("@/lib/security/guard");
+      const req = new NextRequest("http://app.internal/api/resync", {
+        headers: {
+          host: "app.internal",
+          origin: "http://evil-attacker.com",
+        },
+      });
+      expect(verifySameOrigin(req)).toBe(false);
+    });
+
+    it("rejects Sec-Fetch-Site cross-site requests", async () => {
+      const { verifySameOrigin } = await import("@/lib/security/guard");
+      const req = new NextRequest("http://app.internal/api/resync", {
+        headers: {
+          host: "app.internal",
+          "sec-fetch-site": "cross-site",
+        },
+      });
+      expect(verifySameOrigin(req)).toBe(false);
+    });
+  });
+
+  describe("Async Distributed Rate Limiter Fallback", () => {
+    it("executes async rate limiting seamlessly when external Redis is unconfigured", async () => {
+      const { checkRateLimitAsync } = await import("@/lib/security/rate-limiter");
+      const ip = "192.168.1.200";
+      const path = "/api/chat";
+
+      const res1 = await checkRateLimitAsync(ip, path);
+      expect(res1.allowed).toBe(true);
+      expect(res1.backend).toBe("memory");
+      expect(res1.remaining).toBe(9);
+    });
   });
 });
