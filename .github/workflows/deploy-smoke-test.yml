@@ -42,3 +42,4 @@ jobs:
         run: npm run smoke:test
         env:
           DEPLOYMENT_URL: ${{ steps.resolve-url.outputs.target_url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET || secrets.VERCEL_PROTECTION_BYPASS }}
