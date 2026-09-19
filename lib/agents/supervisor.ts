@@ -78,24 +78,19 @@ export async function runSupervisorLoop(
     content: `Received query: "${query}". Sequence: Data Steward → Clarifier → Planner → Analyst → Narrator → Critic.`,
     status: "running",
   };
-  pushTrace(startTrace);
+  // ---- 0. Context resolution -------------------------------------------
+  // Follow-ups like "and for mining?" or "what about last quarter?" only
+  // make sense against the prior turns. Prepend prior turn context to the
+  // query for deterministic routing and fallback degraded path.
+  const history = options.history ?? [];
+  const lastUserTurn = [...history].reverse().find((turn) => turn.role === "user")?.content;
+  const hasAnaphora =
+    /\b(and|also|what about|how about|for (that|the same)|same (sector|period|window)|again)\b/i.test(
+      query
+    ) || /^(and|also|what about|how about)\b/i.test(query.trim());
+  const contextQuery = hasAnaphora && lastUserTurn ? `${lastUserTurn} — ${query}` : query;
 
   try {
-    // ---- 0. Context resolution -------------------------------------------
-    // Follow-ups like "and for mining?" or "what about last quarter?" only
-    // make sense against the prior turns. The most recent user turn is the
-    // strongest carrier of missing context (sector, metric basis, time
-    // frame), so it is prepended to the query for the deterministic routers,
-    // which are pure keyword matchers. LLM prompts receive the full history
-    // instead, where the model can weigh it properly.
-    const history = options.history ?? [];
-    const lastUserTurn = [...history].reverse().find((turn) => turn.role === "user")?.content;
-    const hasAnaphora =
-      /\b(and|also|what about|how about|for (that|the same)|same (sector|period|window)|again)\b/i.test(
-        query
-      ) || /^(and|also|what about|how about)\b/i.test(query.trim());
-    const contextQuery = hasAnaphora && lastUserTurn ? `${lastUserTurn} — ${query}` : query;
-
     if (contextQuery !== query) {
       pushTrace({
         id: makeTraceId("trace_sup_context"),
@@ -323,8 +318,13 @@ export async function runSupervisorLoop(
       criticRejectedFinal: !criticApproved,
     };
   } catch (err: unknown) {
-    // Total failure of the agent runtime: still answer, deterministically.
-    const degraded = routeDegradedQuery(query, options.deals, options.workOrders, options.asOfDate);
+    // Total failure of the agent runtime: still answer, deterministically with resolved context.
+    const degraded = routeDegradedQuery(
+      contextQuery,
+      options.deals,
+      options.workOrders,
+      options.asOfDate
+    );
 
     pushTrace({
       id: makeTraceId("trace_sup_fallback"),

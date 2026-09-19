@@ -1,0 +1,32 @@
+name: Scheduled Live monday.com Contract & Schema Drift Verification
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # Run daily at midnight UTC
+  workflow_dispatch:
+
+jobs:
+  verify-live-contract:
+    name: 🔍 Verify Live monday.com GraphQL Schema & Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Live Contract Probe
+        run: npx tsx scripts/live-contract-check.ts
+        env:
+          MONDAY_API_TOKEN: ${{ secrets.MONDAY_API_TOKEN }}
+          MONDAY_DEALS_BOARD_ID: ${{ secrets.MONDAY_DEALS_BOARD_ID }}
+          MONDAY_WORK_ORDERS_BOARD_ID: ${{ secrets.MONDAY_WORK_ORDERS_BOARD_ID }}

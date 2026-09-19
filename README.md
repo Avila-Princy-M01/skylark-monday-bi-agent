@@ -175,12 +175,12 @@ GitHub Actions (`.github/workflows/ci.yml`) gates every push and PR: secret scan
 
 ```bash
 npm run validate          # typecheck + lint + format:check + tests
-npm run test:coverage     # 133 tests, thresholds: 75% lines/functions/statements, 60% branches
+npm run test:coverage     # 136 tests, thresholds: 75% lines/functions/statements, 60% branches
 npm run build             # production build
 npm run smoke:test        # deployment smoke test (set SMOKE_TEST_URL)
 ```
 
-**Current state: 133 tests across 15 suites, all green.** Highlights:
+**Current state: 136 tests across 16 suites, all green.** Highlights:
 
 - `determinism.test.ts` — 1,000 repeated runs of the metric core produce **identical golden numbers (zero variance)**.
 - `normalizer.test.ts` — every repair rule reproduces a real defect found in the supplied data.
@@ -244,6 +244,6 @@ _Known slowness:_ the transport tests exercise the real exponential-backoff ladd
 
 ## 🗺️ Status — completed vs remaining
 
-**Completed:** live monday.com GraphQL + MCP transports with runtime schema discovery and cursor pagination; single normalization layer with a full data-quality report; 8 deterministic metric tools; multi-agent loop (Supervisor / Data Steward / Clarifier / Planner / Analyst / Narrator / Critic) with LLM planning and deterministic fallback; numeric grounding guard; SSE-streamed trace panel; staleness banners and data-health modal; Exec Brief with copy/download/print; 133 hermetic tests across 15 suites with coverage gates; CI/CD with secret scanning and a deployment smoke test; Vercel deployment; README and DECISION_LOG.
+**Completed:** live monday.com GraphQL + MCP transports with runtime schema discovery and cursor pagination; single normalization layer with a full data-quality report; 8 deterministic metric tools; multi-agent loop (Supervisor / Data Steward / Clarifier / Planner / Analyst / Narrator / Critic) with LLM planning and deterministic fallback; numeric grounding guard; SSE-streamed trace panel; staleness banners and data-health modal; Exec Brief with copy/download/print; 136 hermetic tests across 16 suites with coverage gates; CI/CD with secret scanning and a deployment smoke test; Vercel deployment; README and DECISION_LOG.
 
 **Remaining (with more time):** durable snapshot store; voice agent interface; richer Analyst tool-calling loop; scheduled live-board integration test; golden transcripts from the deployed URL.
