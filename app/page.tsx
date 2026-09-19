@@ -2,7 +2,15 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Bot, Send, RefreshCw, FileText, AlertCircle, Sparkles } from "lucide-react";
+import {
+  Terminal,
+  Send,
+  RefreshCw,
+  FileText,
+  AlertTriangle,
+  Crosshair,
+  ChevronRight,
+} from "lucide-react";
 import { AgentTraceStream } from "@/components/AgentTraceStream";
 import { DataHealthModal } from "@/components/DataHealthModal";
 import { SourceRowDrawer } from "@/components/SourceRowDrawer";
@@ -20,14 +28,35 @@ interface ChatMessage {
   isDegradedFallback?: boolean;
 }
 
-const STARTER_QUESTIONS = [
-  "What is our open pipeline and how much is stalled?",
-  "Show me contracted vs billed vs collected revenue for FY25-26",
-  "What is our collection efficiency and top AR-risk accounts?",
-  "Where is the money stuck across won deals and work orders?",
-  "What is the software attach rate (Spectra/DMO/Dock vs pure service)?",
-  "How is the energy sector performing across pipeline and execution?",
-  "What is our top client concentration risk in pipeline and order book?",
+const STARTER_TELEMETRY_QUERIES = [
+  {
+    label: "PIPELINE_STALL_SCAN",
+    query: "What is our open pipeline and how much is stalled past as-of date?",
+  },
+  {
+    label: "REVENUE_RECOGNITION",
+    query: "Show me pre-tax contracted vs recognized billed vs cash collected for FY25-26",
+  },
+  {
+    label: "AR_AGING_EXPOSURE",
+    query: "What is our collection efficiency and top 10 AR-risk accounts?",
+  },
+  {
+    label: "STUCK_CAPITAL_AUDIT",
+    query: "Where is the money stuck across won deals, unbilled backlog, and uncollected AR?",
+  },
+  {
+    label: "ATTACH_RATE_MIX",
+    query: "What is the software attach rate (Spectra/DMO/Dock vs pure service) in execution?",
+  },
+  {
+    label: "CROSS_BOARD_SECTOR",
+    query: "How is the energy sector performing across pipeline and execution?",
+  },
+  {
+    label: "CONCENTRATION_RISK",
+    query: "What is our top client and owner concentration risk in pipeline and order book?",
+  },
 ];
 
 export default function HomePage() {
@@ -42,7 +71,7 @@ export default function HomePage() {
     if (!q || loading) return;
 
     const userMsg: ChatMessage = {
-      id: `user_${Date.now()}`,
+      id: `usr_${Date.now()}`,
       sender: "user",
       text: q,
     };
@@ -65,9 +94,9 @@ export default function HomePage() {
       }
 
       const botMsg: ChatMessage = {
-        id: `bot_${Date.now()}`,
+        id: `sys_${Date.now()}`,
         sender: "assistant",
-        text: data.answer || data.error || "No response received.",
+        text: data.answer || data.error || "CRITICAL: No telemetry stream returned.",
         traces: data.traces,
         caveats: data.caveats,
         assumptions: data.assumptions,
@@ -81,7 +110,7 @@ export default function HomePage() {
       const errorMsg: ChatMessage = {
         id: `err_${Date.now()}`,
         sender: "assistant",
-        text: `⚠️ Error executing multi-agent loop: ${err instanceof Error ? err.message : String(err)}`,
+        text: `[SYSTEM FAULT] Multi-agent execution halted: ${err instanceof Error ? err.message : String(err)}`,
       };
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
@@ -105,22 +134,27 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0c10] text-zinc-100 flex flex-col font-mono selection:bg-emerald-500 selection:text-black">
-      {/* Top Navigation Bar */}
-      <header className="border-b border-zinc-800 bg-[#0d1015]/90 backdrop-blur sticky top-0 z-40 px-4 md:px-8 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-sm">
-            🦅
+    <div className="min-h-screen bg-[#0A0A0A] text-[#EAEAEA] flex flex-col font-mono selection:bg-[#FF2A2A] selection:text-white border-x border-[#1C1C1C] max-w-[1440px] mx-auto">
+      {/* Top Telemetry Header */}
+      <header className="border-b border-[#262626] bg-[#0E0E0E] sticky top-0 z-40 px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="w-8 h-8 bg-[#181818] border border-[#333] flex items-center justify-center text-[#FF2A2A] font-bold text-xs">
+            <Crosshair className="w-4 h-4" />
           </div>
           <div>
-            <h1 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-              <span>SKYLARK BI AGENT</span>
-              <span className="text-[10px] px-1.5 py-0.2 bg-zinc-800 text-zinc-400 rounded border border-zinc-700">
-                PROD v2.0
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-black tracking-widest text-white uppercase">
+                SKYLARK // TELEMETRY BI AGENT
               </span>
-            </h1>
-            <p className="text-[10px] text-zinc-500">
-              Deterministic Math Engine • Live Monday.com Integration
+              <span className="text-[9px] px-1.5 py-0.5 bg-[#1F1F1F] text-[#888] border border-[#2E2E2E] uppercase font-bold">
+                REV 2.0
+              </span>
+              <span className="text-[9px] px-1.5 py-0.5 bg-[#193319] text-[#4AF626] border border-[#295229] uppercase font-bold">
+                ONLINE
+              </span>
+            </div>
+            <p className="text-[10px] text-[#777] uppercase tracking-wider">
+              DETERMINISTIC MATH ENGINE • ZERO ARITHMETIC DRIFT • MONDAY GRAPHQL
             </p>
           </div>
         </div>
@@ -131,57 +165,72 @@ export default function HomePage() {
           <button
             onClick={handleResync}
             disabled={resyncing}
-            className="p-1.5 border border-zinc-700 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 transition text-xs flex items-center gap-1"
-            title="Resync Monday.com boards"
+            className="px-2.5 py-1.5 border border-[#333] bg-[#141414] hover:bg-[#1E1E1E] hover:border-[#555] text-[#BBB] transition text-xs flex items-center gap-1.5 font-bold uppercase tracking-wider"
+            title="Resync Monday.com GraphQL Boards"
           >
             <RefreshCw
-              className={`w-3.5 h-3.5 ${resyncing ? "animate-spin text-emerald-400" : ""}`}
+              className={`w-3.5 h-3.5 ${resyncing ? "animate-spin text-[#FF2A2A]" : ""}`}
             />
-            <span className="hidden md:inline text-xs">Resync</span>
+            <span className="hidden sm:inline text-[10px]">SYNC BOARDS</span>
           </button>
 
           <Link
             href="/brief"
-            className="px-3 py-1 text-xs border border-emerald-500/40 rounded bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition flex items-center gap-1.5 font-medium"
+            className="px-3 py-1.5 text-xs border border-[#FF2A2A] bg-[#2A0808] hover:bg-[#3D0C0C] text-[#FF6B6B] transition flex items-center gap-1.5 font-bold uppercase tracking-wider"
           >
             <FileText className="w-3.5 h-3.5" />
-            <span>Exec Brief</span>
+            <span className="text-[10px]">EXEC BRIEF</span>
           </Link>
         </div>
       </header>
 
-      {/* Main Chat Workspace */}
-      <main className="flex-1 max-w-5xl w-full mx-auto p-4 md:p-6 flex flex-col justify-between">
-        {/* Messages List */}
-        <div className="space-y-6 flex-1 mb-6">
+      {/* Main Workspace Area */}
+      <main className="flex-1 p-4 md:p-6 flex flex-col justify-between max-w-6xl w-full mx-auto">
+        {/* Messages Stream */}
+        <div className="space-y-4 flex-1 mb-6">
           {messages.length === 0 ? (
-            <div className="py-12 px-4 text-center space-y-6">
-              <div className="inline-flex items-center justify-center p-3 rounded-full bg-zinc-900 border border-zinc-800 text-emerald-400 mb-2">
-                <Bot className="w-8 h-8" />
-              </div>
-              <div className="space-y-1 max-w-lg mx-auto">
-                <h2 className="text-lg font-bold text-white tracking-tight">Welcome, Founder</h2>
-                <p className="text-xs text-zinc-400 leading-relaxed">
-                  Ask real-world commercial and operational questions. Every figure is computed
-                  deterministically in pure TypeScript over normalized live records with zero LLM
-                  math.
+            <div className="py-8 space-y-6">
+              {/* Technical Banner */}
+              <div className="border border-[#262626] bg-[#0E0E0E] p-6 space-y-3">
+                <div className="flex items-center justify-between border-b border-[#1E1E1E] pb-2">
+                  <div className="flex items-center gap-2 text-[#888] text-[10px] tracking-widest uppercase font-bold">
+                    <Terminal className="w-3.5 h-3.5 text-[#FF2A2A]" />
+                    <span>[ SYSTEM INITIALIZATION : STANDBY ]</span>
+                  </div>
+                  <span className="text-[9px] text-[#555] tracking-widest font-mono uppercase">
+                    SYS_ID: SDPL-BI-MESH
+                  </span>
+                </div>
+                <h2 className="text-sm md:text-base font-black tracking-tight text-white uppercase">
+                  AUTONOMOUS COMMERCIAL & OPERATIONAL TELEMETRY
+                </h2>
+                <p className="text-xs text-[#999] leading-relaxed max-w-3xl">
+                  Query pipeline health, revenue realization, past-PO execution bottlenecks, and
+                  concentration exposures. Every numeric metric is strictly validated by the Critic
+                  against deterministic TypeScript calculation registries.
                 </p>
               </div>
 
-              {/* Starter Question Chips */}
-              <div className="max-w-2xl mx-auto pt-4">
-                <div className="text-[11px] text-zinc-500 uppercase tracking-wider font-semibold mb-3 flex items-center justify-center gap-1.5">
-                  <Sparkles className="w-3 h-3 text-emerald-400" />
-                  <span>Suggested Commercial Inquiries</span>
+              {/* Preset Telemetry Inquiries */}
+              <div className="space-y-2">
+                <div className="text-[10px] text-[#777] uppercase tracking-widest font-bold flex items-center gap-2">
+                  <span>{"///"}</span>
+                  <span>PRE-CONFIGURED TELEMETRY TARGETS</span>
                 </div>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {STARTER_QUESTIONS.map((sq, i) => (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {STARTER_TELEMETRY_QUERIES.map((sq, i) => (
                     <button
                       key={i}
-                      onClick={() => handleSend(sq)}
-                      className="px-3 py-1.5 text-xs text-left bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-300 rounded transition leading-normal font-mono"
+                      onClick={() => handleSend(sq.query)}
+                      className="p-3 text-left bg-[#0E0E0E] hover:bg-[#141414] border border-[#222] hover:border-[#444] transition flex flex-col gap-1 group"
                     >
-                      {sq}
+                      <div className="flex items-center justify-between text-[9px] text-[#666] group-hover:text-[#FF2A2A] font-bold tracking-widest">
+                        <span>[ {sq.label} ]</span>
+                        <ChevronRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
+                      </div>
+                      <div className="text-xs text-[#CCC] group-hover:text-white font-mono leading-snug">
+                        {sq.query}
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -191,30 +240,29 @@ export default function HomePage() {
             messages.map((msg) => (
               <div
                 key={msg.id}
-                className={`flex gap-3 ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
+                className={`flex flex-col gap-1 ${msg.sender === "user" ? "items-end" : "items-start"}`}
               >
-                {msg.sender === "assistant" && (
-                  <div className="w-7 h-7 rounded bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xs shrink-0 mt-1">
-                    🦅
-                  </div>
-                )}
+                {/* Message Header Tag */}
+                <div className="text-[9px] text-[#666] tracking-widest uppercase font-bold px-1">
+                  {msg.sender === "user" ? "[ OPERATOR INQUIRY ]" : "[ BI TELEMETRY DISPATCH ]"}
+                </div>
 
                 <div
-                  className={`max-w-3xl rounded-lg p-4 font-mono text-xs md:text-sm leading-relaxed ${
+                  className={`w-full max-w-4xl border p-4 font-mono text-xs md:text-sm leading-relaxed ${
                     msg.sender === "user"
-                      ? "bg-emerald-600/20 border border-emerald-500/30 text-emerald-100"
-                      : "bg-[#11141a] border border-zinc-800 text-zinc-200 shadow-xl"
+                      ? "bg-[#141414] border-[#333] text-white"
+                      : "bg-[#0E0E0E] border-[#262626] text-[#D8D8D8]"
                   }`}
                 >
-                  {/* Assistant Message Trace */}
+                  {/* Multi-Agent Reasoning Trace */}
                   {msg.traces && msg.traces.length > 0 && <AgentTraceStream traces={msg.traces} />}
 
-                  {/* Clarifying Question Quick Replies */}
+                  {/* Clarification Alert */}
                   {msg.clarifyingVerdict?.isAmbiguous && msg.clarifyingVerdict.options && (
-                    <div className="my-3 p-3 rounded bg-amber-500/10 border border-amber-500/20 text-amber-200 space-y-2">
-                      <div className="flex items-center gap-1.5 font-semibold text-xs text-amber-300">
-                        <AlertCircle className="w-3.5 h-3.5" />
-                        <span>Clarification Required:</span>
+                    <div className="my-3 p-3 bg-[#1F1708] border border-[#523E15] text-[#FFD666] space-y-2">
+                      <div className="flex items-center gap-1.5 font-bold text-[10px] tracking-wider uppercase text-[#E5A800]">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        <span>[ AMBIGUITY DETECTED // OPERATOR SELECTION REQUIRED ]</span>
                       </div>
                       <p className="text-xs">{msg.clarifyingVerdict.question}</p>
                       <div className="flex flex-wrap gap-2 pt-1">
@@ -222,7 +270,7 @@ export default function HomePage() {
                           <button
                             key={idx}
                             onClick={() => handleSend(opt.label)}
-                            className="px-2.5 py-1 text-xs bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded text-amber-100 transition"
+                            className="px-2.5 py-1 text-xs bg-[#2E2208] hover:bg-[#42310B] border border-[#7A5B17] text-[#FFE8A3] font-bold uppercase tracking-wider transition"
                           >
                             {opt.label}
                           </button>
@@ -231,12 +279,12 @@ export default function HomePage() {
                     </div>
                   )}
 
-                  {/* Message Content */}
+                  {/* Telemetry Output Text */}
                   <div className="whitespace-pre-wrap leading-relaxed">{msg.text}</div>
 
-                  {/* Source Rows Drawer */}
+                  {/* Grounded Source Rows Drawer */}
                   {msg.sourceRowIds && msg.sourceRowIds.length > 0 && (
-                    <div className="mt-3 pt-2 border-t border-zinc-800/80 flex items-center justify-between">
+                    <div className="mt-4 pt-3 border-t border-[#1F1F1F] flex items-center justify-between">
                       <SourceRowDrawer sourceRowIds={msg.sourceRowIds} />
                     </div>
                   )}
@@ -246,39 +294,45 @@ export default function HomePage() {
           )}
 
           {loading && (
-            <div className="flex gap-3 items-center text-xs text-zinc-400 font-mono p-4 bg-zinc-900/40 rounded border border-zinc-800 animate-pulse">
-              <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" />
-              <span>
-                Multi-agent loop executing: Data Steward auditing records → Analyst computing
-                deterministic metrics → Critic verifying grounding...
-              </span>
+            <div className="border border-[#262626] bg-[#0E0E0E] p-4 flex items-center gap-3 text-xs text-[#888] font-mono animate-pulse">
+              <RefreshCw className="w-4 h-4 animate-spin text-[#FF2A2A]" />
+              <div className="space-y-0.5">
+                <div className="text-[10px] text-[#FF2A2A] font-bold tracking-widest uppercase">
+                  [ PIPELINE EXECUTING ]
+                </div>
+                <div className="text-[11px] text-[#AAA]">
+                  SUPERVISOR ROUTING → DATA STEWARD NORMALIZATION → ANALYST DETERMINISTIC REGISTRY →
+                  CRITIC GROUNDING AUDIT
+                </div>
+              </div>
             </div>
           )}
         </div>
 
-        {/* Input Bar */}
-        <div className="sticky bottom-0 bg-[#0a0c10]/90 backdrop-blur pt-2 pb-4">
+        {/* Tactical Query Input Bar */}
+        <div className="sticky bottom-0 bg-[#0A0A0A]/95 pt-2 pb-4 border-t border-[#1C1C1C]">
           <form
             onSubmit={(e) => {
               e.preventDefault();
               handleSend();
             }}
-            className="flex items-center gap-2 p-1.5 rounded-lg border border-zinc-700 bg-zinc-900/90 shadow-2xl focus-within:border-emerald-500 transition"
+            className="flex items-center gap-2 p-1.5 border border-[#333] bg-[#0E0E0E] focus-within:border-[#FF2A2A] transition"
           >
+            <div className="pl-2 text-[#666] font-bold text-xs select-none">&gt;&gt;</div>
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask any founder-level business question (e.g. stalled pipeline, revenue, AR collection, attach rate)..."
-              className="flex-1 bg-transparent px-3 py-2 text-xs md:text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none font-mono"
+              placeholder="ENTER TELEMETRY QUERY (E.G. STALLED PIPELINE, AR RISK, ATTACH RATE, CONCENTRATION)..."
+              className="flex-1 bg-transparent px-2 py-2 text-xs md:text-sm text-white placeholder-[#555] focus:outline-none font-mono tracking-tight"
             />
             <button
               type="submit"
               disabled={loading || !input.trim()}
-              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-bold text-xs rounded transition flex items-center gap-1.5 shrink-0"
+              className="px-4 py-2 bg-[#FF2A2A] hover:bg-[#E02020] disabled:opacity-30 disabled:hover:bg-[#FF2A2A] text-white font-black text-xs uppercase tracking-widest transition flex items-center gap-1.5 shrink-0"
             >
-              <span>Query</span>
-              <Send className="w-3.5 h-3.5" />
+              <span>TRANSMIT</span>
+              <Send className="w-3 h-3" />
             </button>
           </form>
         </div>

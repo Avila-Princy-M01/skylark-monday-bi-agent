@@ -49,67 +49,78 @@ export default function ExecBriefPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0d0f12] text-zinc-100 p-4 md:p-8 font-mono">
-      <div className="max-w-4xl mx-auto">
-        {/* Header Controls */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pb-6 mb-8 border-b border-zinc-800">
+    <div className="min-h-screen bg-[#0A0A0A] text-[#EAEAEA] p-4 md:p-8 font-mono max-w-[1440px] mx-auto border-x border-[#1C1C1C]">
+      <div className="max-w-5xl mx-auto space-y-6">
+        {/* Header Telemetry Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#262626]">
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="p-2 border border-zinc-700 rounded bg-zinc-900 hover:bg-zinc-800 transition flex items-center gap-2 text-sm text-zinc-300"
+              className="px-3 py-1.5 border border-[#333] bg-[#141414] hover:bg-[#1C1C1C] transition flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#BBB]"
             >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Back to Chat</span>
+              <ArrowLeft className="w-3.5 h-3.5 text-[#FF2A2A]" />
+              <span>[ ESC : BACK TO TERMINAL ]</span>
             </Link>
-            <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-              <span className="text-emerald-400">⚡</span> Exec Briefing
-            </h1>
+            <div>
+              <h1 className="text-xs md:text-sm font-black tracking-widest text-white uppercase flex items-center gap-2">
+                <span>SKYLARK // EXECUTIVE BRIEFING DISPATCH</span>
+              </h1>
+              <p className="text-[10px] text-[#777] uppercase tracking-wider">
+                COMPREHENSIVE COMMERCIAL & OPERATIONAL SYNTHESIS
+              </p>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={fetchBrief}
               disabled={loading}
-              className="px-3 py-1.5 text-xs border border-zinc-700 rounded bg-zinc-900 hover:bg-zinc-800 transition flex items-center gap-1.5"
+              className="px-3 py-1.5 text-xs border border-[#333] bg-[#141414] hover:bg-[#1E1E1E] transition flex items-center gap-1.5 font-bold uppercase tracking-wider text-[#BBB]"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-              <span>Refresh</span>
+              <RefreshCw
+                className={`w-3.5 h-3.5 ${loading ? "animate-spin text-[#FF2A2A]" : ""}`}
+              />
+              <span className="text-[10px]">REFRESH</span>
             </button>
             <button
               onClick={handleCopy}
-              className="px-3 py-1.5 text-xs border border-zinc-700 rounded bg-zinc-900 hover:bg-zinc-800 transition flex items-center gap-1.5 text-emerald-400"
+              className="px-3 py-1.5 text-xs border border-[#333] bg-[#141414] hover:bg-[#1E1E1E] transition flex items-center gap-1.5 text-[#4AF626] font-bold uppercase tracking-wider"
             >
               {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copied ? "Copied" : "Copy MD"}</span>
+              <span className="text-[10px]">{copied ? "COPIED" : "COPY MD"}</span>
             </button>
             <button
               onClick={handleDownload}
-              className="px-3 py-1.5 text-xs border border-zinc-700 rounded bg-zinc-900 hover:bg-zinc-800 transition flex items-center gap-1.5"
+              className="px-3 py-1.5 text-xs border border-[#333] bg-[#141414] hover:bg-[#1E1E1E] transition flex items-center gap-1.5 font-bold uppercase tracking-wider text-[#BBB]"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Download .md</span>
+              <Download className="w-3.5 h-3.5 text-[#FF2A2A]" />
+              <span className="text-[10px]">DOWNLOAD .MD</span>
             </button>
             <button
               onClick={handlePrint}
-              className="px-3 py-1.5 text-xs border border-zinc-700 rounded bg-zinc-900 hover:bg-zinc-800 transition flex items-center gap-1.5"
+              className="px-3 py-1.5 text-xs border border-[#FF2A2A] bg-[#2A0808] hover:bg-[#3D0C0C] text-[#FF6B6B] transition flex items-center gap-1.5 font-bold uppercase tracking-wider"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>Print / PDF</span>
+              <span className="text-[10px]">PRINT / PDF</span>
             </button>
           </div>
         </div>
 
         {/* Content Container */}
         {loading ? (
-          <div className="p-12 border border-zinc-800 rounded-lg bg-zinc-900/50 flex flex-col items-center justify-center gap-3">
-            <RefreshCw className="w-6 h-6 animate-spin text-emerald-400" />
-            <span className="text-sm text-zinc-400">
-              Generating verified deterministic leadership brief...
+          <div className="p-16 border border-[#262626] bg-[#0E0E0E] flex flex-col items-center justify-center gap-3">
+            <RefreshCw className="w-6 h-6 animate-spin text-[#FF2A2A]" />
+            <span className="text-xs text-[#888] uppercase tracking-widest font-bold">
+              [ SYNTHESIZING VERIFIED DETERMINISTIC LEADERSHIP DOSSIER... ]
             </span>
           </div>
         ) : (
-          <div className="border border-zinc-800 rounded-lg bg-[#12151a] p-6 md:p-10 shadow-2xl overflow-x-auto print:bg-white print:text-black print:border-none">
-            <pre className="whitespace-pre-wrap font-mono text-xs md:text-sm leading-relaxed text-zinc-200 print:text-black">
+          <div className="border border-[#262626] bg-[#0E0E0E] p-6 md:p-10 shadow-2xl overflow-x-auto print:bg-white print:text-black print:border-none">
+            <div className="flex items-center justify-between border-b border-[#1C1C1C] pb-3 mb-6 text-[10px] text-[#666] tracking-widest uppercase font-bold print:hidden">
+              <span>SECURITY CLASSIFICATION: CONFIDENTIAL / INTERNAL BI</span>
+              <span>SDPL // AUTOMATED AUDIT TRAIL VERIFIED</span>
+            </div>
+            <pre className="whitespace-pre-wrap font-mono text-xs md:text-sm leading-relaxed text-[#D0D0D0] print:text-black">
               {markdown}
             </pre>
           </div>
