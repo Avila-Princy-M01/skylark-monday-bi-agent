@@ -17,7 +17,7 @@
     "test:coverage": "vitest run --coverage",
     "smoke:test": "tsx scripts/smoke-test.ts",
     "validate": "npm run typecheck && npm run lint && npm run format:check && npm run test",
-    "prepare": "husky"
+    "prepare": "node -e \"if (process.env.NODE_ENV !== 'production' && !process.env.CI) { try { require('husky')() } catch(e) {} }\""
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^0.0.12",
