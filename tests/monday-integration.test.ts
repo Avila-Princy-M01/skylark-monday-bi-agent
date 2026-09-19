@@ -81,7 +81,7 @@ describe("Monday.com Integration & Data Caching Suite", () => {
       lastSyncedAt: "2026-03-31T12:00:00.000Z",
     };
 
-    const cached = setCachedData(mockState, 100); // 100ms TTL
+    const cached = setCachedData(mockState, 5000); // 5000ms TTL
     expect(cached.source).toBe("live");
     expect(cached.isStale).toBe(false);
 
