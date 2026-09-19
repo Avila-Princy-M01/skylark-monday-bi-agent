@@ -1,5 +1,7 @@
 # 📜 Decision Log — Skylark Drones monday.com BI Agent
 
+> **Deployed:** [https://skylark-monday-bi-agent-blush.vercel.app](https://skylark-monday-bi-agent-blush.vercel.app/) | **Repo:** [https://github.com/Avila-Princy-M01/skylark-monday-bi-agent](https://github.com/Avila-Princy-M01/skylark-monday-bi-agent)
+
 ## Key assumptions
 
 - **As-of date anchored to the dataset, not the wall clock.** The data extends into 2026, so resolving "this quarter" against the real clock returns empty results for reviewers. All fiscal windows (April–March, matching the `SDPL/FY25-26/...` invoice convention) resolve against a configurable as-of date defaulting to `2026-03-31`, and the resolved window is disclosed in every answer.
@@ -27,3 +29,4 @@ Built as a one-click **Exec Brief** (`/brief`): headline KPIs, pipeline health, 
 3. **Webhook-driven incremental sync** instead of TTL polling.
 4. **Scheduled live-board integration test** separate from hermetic CI.
 5. **Golden transcripts** captured from the deployed URL as living documentation.
+6. **Voice agent interface** — a speech-in / speech-out layer (e.g. Gemini Live or ElevenLabs + Whisper) on top of the same multi-agent pipeline, so a founder can ask "What's our pipeline?" hands-free from a phone. The deterministic math core stays identical; only the I/O channel changes. This was the next item on the roadmap and would have been straightforward to wire given the SSE-streaming architecture already in place.

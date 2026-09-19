@@ -426,29 +426,61 @@ export function normalizeWorkOrders(
     };
 
     const rawWoNum = item.name || getVal("Work Order Number") || "";
-    const rawClient = getVal("Client Code") || getVal("text_client") || "";
+    // "Customer Name Code" is the actual Monday column title (was "Client Code")
+    const rawClient =
+      getVal("Customer Name Code") || getVal("Client Code") || getVal("text_client") || "";
     const rawBdKam = getVal("BD/KAM Personnel code") || getVal("text_bdkam") || "";
     const rawSector = getVal("Sector") || getVal("text_sector") || "";
     const rawNature = getVal("Nature of Work") || getVal("text_nature") || "";
-    const rawPoDate = getVal("PO Date") || getVal("date_po") || "";
+    // "Date of PO/LOI" is the actual Monday column title (was "PO Date")
+    const rawPoDate = getVal("Date of PO/LOI") || getVal("PO Date") || getVal("date_po") || "";
     const rawDeliveryDate = getVal("Data Delivery Date") || getVal("date_delivery") || "";
+    // Actual Monday column titles include "(Masked)" suffix
     const rawOrderValExcl =
-      getVal("Order Value (Excl. GST)") || getVal("numbers_order_excl") || "0";
+      getVal("Amount in Rupees (Excl of GST) (Masked)") ||
+      getVal("Order Value (Excl. GST)") ||
+      getVal("numbers_order_excl") ||
+      "0";
     const rawOrderValIncl =
-      getVal("Order Value (Incl. GST)") || getVal("numbers_order_incl") || "0";
+      getVal("Amount in Rupees (Incl of GST) (Masked)") ||
+      getVal("Order Value (Incl. GST)") ||
+      getVal("numbers_order_incl") ||
+      "0";
     const rawBilledExcl =
-      getVal("Billed Amount (Excl. GST)") || getVal("numbers_billed_excl") || "0";
+      getVal("Billed Value in Rupees (Excl of GST.) (Masked)") ||
+      getVal("Billed Amount (Excl. GST)") ||
+      getVal("numbers_billed_excl") ||
+      "0";
     const rawBilledIncl =
-      getVal("Billed Amount (Incl. GST)") || getVal("numbers_billed_incl") || "0";
+      getVal("Billed Value in Rupees (Incl of GST.) (Masked)") ||
+      getVal("Billed Amount (Incl. GST)") ||
+      getVal("numbers_billed_incl") ||
+      "0";
     const rawCollectedIncl =
-      getVal("Collected Amount (Incl. GST)") || getVal("numbers_collected_incl") || "0";
+      getVal("Collected Amount in Rupees (Incl of GST.) (Masked)") ||
+      getVal("Collected Amount (Incl. GST)") ||
+      getVal("numbers_collected_incl") ||
+      "0";
     const rawAmountToBeBilled =
-      getVal("Amount to be Billed (Excl. GST)") || getVal("numbers_tobe_billed") || "0";
+      getVal("Amount to be billed in Rs. (Exl. of GST) (Masked)") ||
+      getVal("Amount to be Billed (Excl. GST)") ||
+      getVal("numbers_tobe_billed") ||
+      "0";
     const rawExecStatus = getVal("Execution Status") || getVal("status_exec") || "";
-    const rawBillingStatus = getVal("Billing Status") || getVal("status_billing") || "";
-    const rawPoQty = getVal("PO Quantity") || getVal("text_po_qty") || "";
-    const rawDeliveredQty = getVal("Delivered Quantity") || getVal("text_del_qty") || "";
-    const rawInvoiceNum = getVal("Invoice Number") || getVal("text_invoice") || null;
+    const rawBillingStatus =
+      getVal("Billing Status") || getVal("WO Status (billed)") || getVal("status_billing") || "";
+    // "Quantities as per PO" is the actual Monday column title (was "PO Quantity")
+    const rawPoQty =
+      getVal("Quantities as per PO") || getVal("PO Quantity") || getVal("text_po_qty") || "";
+    // "Quantity billed (till date)" is the actual Monday column title (was "Delivered Quantity")
+    const rawDeliveredQty =
+      getVal("Quantity billed (till date)") ||
+      getVal("Delivered Quantity") ||
+      getVal("text_del_qty") ||
+      "";
+    // "latest invoice no." is the actual Monday column title (was "Invoice Number")
+    const rawInvoiceNum =
+      getVal("latest invoice no.") || getVal("Invoice Number") || getVal("text_invoice") || null;
 
     if (!rawWoNum && !rawClient && !rawBdKam) {
       junkRowsDropped++;
