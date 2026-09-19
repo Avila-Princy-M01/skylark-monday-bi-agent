@@ -29,6 +29,9 @@ export function extractNumbersFromProse(text: string): string[] {
     .replace(/\bFY\s*['’]?\d{2,4}(?:[-/]\d{2,4})?\b/gi, " ")
     .replace(/\bQ[1-4](?:\s*['’]?\d{2,4})?\b/gi, " ")
     .replace(/\b\d{1,2}(?:st|nd|rd|th)\b/gi, " ")
+    .replace(/\b18\s*%\s*(?:GST)?\b/gi, " ")
+    .replace(/\bGST\s*(?:of|@)?\s*18\s*%\b/gi, " ")
+    .replace(/\b18\s*percent\b/gi, " ")
     .replace(/(?:^|\n|\.\s+)\d+\.\s+/g, " ")
     .replace(/#\s*\d+\b/g, " ")
     .replace(/\bNo\.\s*\d+\b/gi, " ")
@@ -82,6 +85,9 @@ export function validateNumericGrounding(
   const tokens = extractNumbersFromProse(prose);
   const factSheetNumbers: number[] = [];
 
+  // Allow standard statutory Indian GST rates present across all work orders
+  factSheetNumbers.push(18, 1.18);
+
   for (const fs of factSheets) {
     if (typeof fs.rowsScanned === "number") {
       factSheetNumbers.push(fs.rowsScanned);
@@ -90,12 +96,54 @@ export function validateNumericGrounding(
       factSheetNumbers.push(fs.sourceRowIds.length);
     }
     if (fs.numbers) {
-      for (const val of Object.values(fs.numbers)) {
+      for (const [k, val] of Object.entries(fs.numbers)) {
         if (typeof val === "number") {
           factSheetNumbers.push(val);
           factSheetNumbers.push(Math.abs(val));
           factSheetNumbers.push(-Math.abs(val));
+
+          // Complementary percentages (only for percentage metrics between 5% and 95%)
+          const isPctMetric =
+            k.toLowerCase().includes("pct") || k.toLowerCase().includes("efficiency");
+
+          if (isPctMetric && val >= 5 && val <= 95) {
+            const complement = 100 - val;
+            factSheetNumbers.push(complement);
+            factSheetNumbers.push(Math.round(complement * 10) / 10);
+            factSheetNumbers.push(Math.round(complement));
+          }
         }
+      }
+
+      // Standard revenue conversion ratios when both components exist
+      const n = fs.numbers;
+      if (
+        typeof n.billedAmountExclGst === "number" &&
+        typeof n.contractedOrderValueExclGst === "number" &&
+        n.contractedOrderValueExclGst > 0
+      ) {
+        const billedPct = (n.billedAmountExclGst / n.contractedOrderValueExclGst) * 100;
+        factSheetNumbers.push(billedPct, Math.round(billedPct * 10) / 10, Math.round(billedPct));
+      }
+      if (
+        typeof n.collectedAmountInclGst === "number" &&
+        typeof n.billedAmountInclGst === "number" &&
+        n.billedAmountInclGst > 0
+      ) {
+        const collPct = (n.collectedAmountInclGst / n.billedAmountInclGst) * 100;
+        factSheetNumbers.push(collPct, Math.round(collPct * 10) / 10, Math.round(collPct));
+      }
+      if (
+        typeof n.collectedAmountInclGst === "number" &&
+        typeof n.contractedOrderValueInclGst === "number" &&
+        n.contractedOrderValueInclGst > 0
+      ) {
+        const collContPct = (n.collectedAmountInclGst / n.contractedOrderValueInclGst) * 100;
+        factSheetNumbers.push(
+          collContPct,
+          Math.round(collContPct * 10) / 10,
+          Math.round(collContPct)
+        );
       }
     }
     // Also include any numbers from asOfDate (e.g., year, month, day) and fiscalYear

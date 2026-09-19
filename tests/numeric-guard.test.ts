@@ -106,4 +106,26 @@ describe("Numeric Grounding Guard & Anti-Hallucination Bot", () => {
     const rendered = renderDeterministicFallback([stuckMoneyFactSheet]);
     expect(rendered).toContain("-₹1.08 L");
   });
+
+  it("approves statutory GST rate mentions, complementary percentages, and derived ratios", () => {
+    const revenueFactSheet: MetricFactSheet = {
+      numbers: {
+        contractedOrderValueExclGst: 210600000,
+        billedAmountExclGst: 107400000,
+        overallCollectionEfficiencyPct: 71.4,
+      },
+      sourceRowIds: ["wo_1"],
+      rowsScanned: 177,
+      assumptions: [],
+      caveats: [],
+      asOfDate: "2026-03-31",
+      fiscalYear: "FY25-26",
+    };
+
+    const prose =
+      "Out of ₹21.06 Cr contracted value, we have billed ₹10.74 Cr (51% billed). Collection efficiency is 71.4% with 28.6% uncollected, subject to standard 18% GST.";
+    const result = validateNumericGrounding(prose, [revenueFactSheet]);
+    expect(result.isGrounded).toBe(true);
+    expect(result.unverifiedNumbers).toEqual([]);
+  });
 });
