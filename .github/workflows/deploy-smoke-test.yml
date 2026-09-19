@@ -26,8 +26,8 @@ jobs:
           node-version: 22
           cache: "npm"
 
-      - name: Install Dependencies
-        run: npm install --prefer-offline --no-audit
+      - name: Install Dependencies with Frozen Lockfile
+        run: npm ci
 
       - name: Resolve Deployment URL
         id: resolve-url

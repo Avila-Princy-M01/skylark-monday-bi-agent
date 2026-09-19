@@ -35,6 +35,11 @@ export async function GET() {
   return NextResponse.json(
     {
       status: systemStatus,
+      checkType: "configuration_readiness",
+      scope: "lightweight_readiness_probe",
+      description:
+        "Lightweight configuration readiness probe verifying environment variables, board mappings, and LLM key presence. Does not make live upstream network calls to Monday.com or LLM providers during basic probe.",
+      upstreamConnectivityVerified: false,
       service: "skylark-monday-bi-agent",
       timestamp: new Date().toISOString(),
       uptimeSeconds: Math.floor(process.uptime()),
