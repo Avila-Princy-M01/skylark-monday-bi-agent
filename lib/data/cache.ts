@@ -60,6 +60,28 @@ export function setCachedData(
   return fullState;
 }
 
+/**
+ * Drops the live cache entry but keeps the durable snapshot.
+ *
+ * This is what a manual resync should do: force a re-read from monday.com while
+ * still being able to fall back to the previous good data if that read fails.
+ */
 export function invalidateCache(): void {
   globalCache = null;
+}
+
+/**
+ * Drops the cache AND the durable snapshot.
+ *
+ * Only used to reset module state between tests, where a snapshot surviving from
+ * a previous case would make assertions depend on execution order.
+ */
+export function clearCacheSnapshot(): void {
+  globalCache = null;
+  durableSnapshot = null;
+}
+
+/** The timestamp of the retained snapshot, if one exists. */
+export function getSnapshotTimestamp(): string | null {
+  return durableSnapshot?.lastSyncedAt ?? null;
 }

@@ -38,3 +38,7 @@ next-env.d.ts
 # dataset spreadsheets (per spec: no raw data files committed)
 *.xlsx
 *.csv
+
+# Codebuff agent scaffolding (tool-local, not part of the submission)
+.agents/
+AGENTS.md

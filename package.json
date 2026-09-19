@@ -16,12 +16,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "smoke:test": "tsx scripts/smoke-test.ts",
-    "validate": "npm run typecheck && npm run lint && npm run format:check && npm run test",
-    "prepare": "node -e \"if (!process.env.CI && process.env.NODE_ENV !== 'production') { import('husky').then(h => h.default && h.default()).catch(() => {}) }\""
+    "validate": "npm run typecheck && npm run lint && npm run format:check && npm run test"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "^0.0.12",
-    "ai": "^4.1.46",
     "clsx": "^2.1.1",
     "lucide-react": "^1.16.0",
     "next": "^15.1.0",

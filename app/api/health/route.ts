@@ -1,71 +1,129 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import {
+  getConfig,
+  getMondayConfig,
+  isMondayConfigured,
+  getCacheTtlSeconds,
+  getAsOfDate,
+} from "@/lib/config";
+import { getCachedData } from "@/lib/data/cache";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export type HealthStatus = "healthy" | "degraded" | "misconfigured";
 
-export async function GET() {
-  const hasMondayToken = !!process.env.MONDAY_API_TOKEN;
-  const hasDealsBoardId = !!process.env.DEALS_BOARD_ID;
-  const hasWorkOrdersBoardId = !!process.env.WORK_ORDERS_BOARD_ID;
-  const hasLlmKey = !!(
-    process.env.GEMINI_API_KEY ||
-    process.env.GLM_API_KEY ||
-    process.env.GROQ_API_KEY ||
-    process.env.OPENROUTER_API_KEY
-  );
+/**
+ * Health endpoint.
+ *
+ * By default this is a cheap *configuration* readiness probe: it reports which
+ * environment variables are present and which LLM providers are in the failover
+ * chain, without spending monday.com API quota.
+ *
+ * Pass `?probe=1` to additionally perform a live connectivity test against
+ * monday.com (one board-schema read per board). That distinguishes "configured"
+ * from "actually working", which a pure env check cannot do.
+ */
+export async function GET(req: NextRequest) {
+  const mondayConfigured = isMondayConfigured();
+  const config = getConfig();
+  const missing: string[] = [];
 
-  // Evaluate real system readiness state
-  let systemStatus: HealthStatus = "healthy";
+  if (!mondayConfigured) {
+    const monday = getMondayConfig();
+    if (!monday.apiToken) missing.push("MONDAY_API_TOKEN");
+    if (!monday.dealsBoardId) missing.push("DEALS_BOARD_ID");
+    if (!monday.workOrdersBoardId) missing.push("WORK_ORDERS_BOARD_ID");
+  }
+
+  const providersConfigured = config.llmChain.map((provider) => provider.providerName);
+  const hasLlmKey = providersConfigured.length > 0;
+  const cached = getCachedData();
+
+  let upstreamProbe: {
+    requested: true;
+    mondayReachable: boolean;
+    error: string | null;
+  } | null = null;
+
+  const shouldProbe = req.nextUrl.searchParams.get("probe") === "1";
+
+  if (shouldProbe && mondayConfigured) {
+    try {
+      const { createMondaySource } = await import("@/lib/monday/factory");
+      const source = createMondaySource();
+      await source.getBoardSchema(getMondayConfig().dealsBoardId);
+      upstreamProbe = { requested: true, mondayReachable: true, error: null };
+    } catch (error) {
+      upstreamProbe = {
+        requested: true,
+        mondayReachable: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  let status: HealthStatus = "healthy";
   const issues: string[] = [];
 
-  if (!hasMondayToken || !hasDealsBoardId || !hasWorkOrdersBoardId) {
-    systemStatus = "misconfigured";
-    issues.push("Missing Monday.com API credentials or board IDs");
+  if (missing.length > 0) {
+    status = "misconfigured";
+    issues.push(`Missing monday.com configuration: ${missing.join(", ")}`);
   }
 
   if (!hasLlmKey) {
-    // If Monday is configured but no LLM key exists, system runs in degraded deterministic mode
-    systemStatus = systemStatus === "misconfigured" ? "misconfigured" : "degraded";
+    // Without a provider key the agent still answers, deterministically.
+    status = status === "misconfigured" ? "misconfigured" : "degraded";
     issues.push(
-      "No active LLM provider configured; operating in degraded deterministic rule-based mode"
+      "No LLM provider key configured; the agent runs in deterministic degraded mode (no generated prose)."
     );
   }
 
-  const httpStatus = systemStatus === "misconfigured" ? 503 : 200;
+  if (upstreamProbe && !upstreamProbe.mondayReachable) {
+    status = status === "misconfigured" ? "misconfigured" : "degraded";
+    issues.push(`Live monday.com probe failed: ${upstreamProbe.error ?? "unknown error"}`);
+  }
+
+  if (cached?.isStale) {
+    issues.push("The in-process cache is expired; the next request will attempt a live resync.");
+  }
 
   return NextResponse.json(
     {
-      status: systemStatus,
-      checkType: "configuration_readiness",
-      scope: "lightweight_readiness_probe",
-      description:
-        "Lightweight configuration readiness probe verifying environment variables, board mappings, and LLM key presence. Does not make live upstream network calls to Monday.com or LLM providers during basic probe.",
-      upstreamConnectivityVerified: false,
+      status,
       service: "skylark-monday-bi-agent",
+      checkType: upstreamProbe ? "configuration_and_connectivity" : "configuration_readiness",
+      upstreamConnectivityVerified: Boolean(upstreamProbe?.mondayReachable),
+      hint: "Append ?probe=1 to perform a live monday.com connectivity check.",
       timestamp: new Date().toISOString(),
       uptimeSeconds: Math.floor(process.uptime()),
       diagnostics: {
         monday: {
-          configured: hasMondayToken && hasDealsBoardId && hasWorkOrdersBoardId,
-          dataSource: process.env.MONDAY_DATA_SOURCE || "graphql",
-          dealsBoardId: hasDealsBoardId ? "configured" : "missing",
-          workOrdersBoardId: hasWorkOrdersBoardId ? "configured" : "missing",
+          configured: mondayConfigured,
+          dataSource: config.monday.dataSource,
+          apiVersion: config.monday.apiVersion,
+          dealsBoardId: config.monday.dealsBoardId ? "configured" : "missing",
+          workOrdersBoardId: config.monday.workOrdersBoardId ? "configured" : "missing",
         },
         llm: {
           configured: hasLlmKey,
-          providers: {
-            gemini: !!process.env.GEMINI_API_KEY,
-            glm: !!process.env.GLM_API_KEY,
-            groq: !!process.env.GROQ_API_KEY,
-            openrouter: !!process.env.OPENROUTER_API_KEY,
-          },
+          providers: providersConfigured,
+          order: ["gemini", "glm", "groq", "openrouter"],
         },
         cache: {
-          ttlSeconds: Number(process.env.CACHE_TTL_SECONDS || 300),
-          asOfDate: process.env.AS_OF_DATE || "auto",
+          ttlSeconds: getCacheTtlSeconds(),
+          hasSnapshot: Boolean(cached),
+          isStale: cached?.isStale ?? null,
+          lastSyncedAt: cached?.lastSyncedAt ?? null,
         },
+        time: {
+          asOfDate: getAsOfDate(),
+          fiscalYearConvention: "Indian fiscal year, 1 April to 31 March",
+        },
+        upstreamProbe,
       },
       issues: issues.length > 0 ? issues : undefined,
     },
-    { status: httpStatus }
+    { status: status === "misconfigured" ? 503 : 200 }
   );
 }

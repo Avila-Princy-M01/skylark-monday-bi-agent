@@ -1,4 +1,5 @@
 import { MetricFactSheet } from "../data/types";
+import { MetricToolName } from "../tools/registry";
 
 export type AgentRole =
   "supervisor" | "data_steward" | "clarifier" | "analyst" | "critic" | "narrator";
@@ -39,6 +40,10 @@ export interface CriticReview {
   feedback?: string;
   missingAngles?: string[];
   groundingFailures?: string[];
+  /** Metric tools the Critic wants the Analyst to run before re-narrating. */
+  requestedTools?: MetricToolName[];
+  /** True when this rejection needs fresh metrics, not just new prose. */
+  reanalysisRequired?: boolean;
 }
 
 export interface MultiAgentExecutionResult {
@@ -51,4 +56,8 @@ export interface MultiAgentExecutionResult {
   dataQualityIssuesCount: number;
   isDegradedFallback?: boolean;
   clarifyingVerdict?: ClarifierVerdict;
+  /** Number of Critic-driven re-analysis passes actually performed. */
+  revisionPasses?: number;
+  /** True when the Critic never approved within the revision budget. */
+  criticRejectedFinal?: boolean;
 }

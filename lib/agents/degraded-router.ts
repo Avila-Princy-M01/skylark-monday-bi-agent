@@ -27,6 +27,11 @@ export function routeDegradedQuery(
   const factSheets: MetricFactSheet[] = [];
   let category = "general";
 
+  // Whole-word test. Plain substring matching silently mis-routed questions:
+  // "softWARe attach rate" and "how ARe we doing" both contain "ar" and were
+  // being answered with receivables metrics.
+  const hasWord = (word: string) => new RegExp(`\\b${word}\\b`).test(q);
+
   if (q.includes("stalled") || q.includes("aging") || q.includes("delayed")) {
     category = "stalled_pipeline";
     const res = getStalledDeals(deals, { asOfDate });
@@ -42,7 +47,7 @@ export function routeDegradedQuery(
     factSheets.push(res.factSheet);
   } else if (
     q.includes("collection") ||
-    q.includes("ar") ||
+    hasWord("ar") ||
     q.includes("receivable") ||
     q.includes("over-billed")
   ) {

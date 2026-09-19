@@ -13,11 +13,15 @@ export interface GroundingValidationResult {
  * Extracts candidate numeric tokens from text, e.g. "₹1.50 Cr", "73.1%", "12,000", "489360", "₹444000"
  */
 export function extractNumbersFromProse(text: string): string[] {
-  // Strip out ISO dates YYYY-MM-DD, DD/MM/YYYY, and FY strings like FY25-26 to avoid date fragments
+  // Strip out ISO dates YYYY-MM-DD, DD/MM/YYYY, and FY strings like FY25-26 to avoid date fragments.
+  // Also strip ratio patterns like "1:1" and "3:2" — the guard previously read the leading
+  // digit plus the next word's first letter ("1 l") as a bogus "one lakh" token and rejected
+  // truthful answers containing ratio caveats.
   const sanitized = text
     .replace(/\b\d{4}-\d{2}-\d{2}\b/g, " ")
     .replace(/\b\d{1,2}[/-]\d{1,2}[/-]\d{4}\b/g, " ")
-    .replace(/\bFY\d{2}-\d{2}\b/gi, " ");
+    .replace(/\bFY\d{2}-\d{2}\b/gi, " ")
+    .replace(/\b\d+\s*:\s*\d+\b/g, " ");
 
   const matches = sanitized.match(/(?:₹\s*)?[\d,]+(?:\.\d+)?(?:\s*(?:Cr|L|lakh|crore|%|k|M))?/gi);
   if (!matches) return [];
@@ -70,6 +74,15 @@ export function validateNumericGrounding(
           factSheetNumbers.push(val);
         }
       }
+    }
+    // Disclosed constants count as grounded context. Assumption lines carry
+    // configuration the pipeline itself writes (e.g. "High=0.7, Medium=0.4,
+    // Low=0.15" probability weights), so prose repeating those figures must
+    // not be rejected — they are disclosures, not computed claims.
+    const disclosed = [...(fs.assumptions ?? []), ...(fs.caveats ?? [])].join(" ");
+    for (const token of extractNumbersFromProse(disclosed)) {
+      const parsed = parseTokenToNumber(token);
+      if (parsed !== null) factSheetNumbers.push(parsed);
     }
   }
 
