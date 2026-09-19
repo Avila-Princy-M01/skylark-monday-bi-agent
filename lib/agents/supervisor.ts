@@ -9,6 +9,11 @@ import { runNarratorWithLlm } from "./narrator";
 import { createAnalystPlan } from "./planner";
 import { routeDegradedQuery } from "./degraded-router";
 
+export interface ConversationTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export interface SupervisorOptions {
   deals: Deal[];
   workOrders: WorkOrder[];
@@ -22,6 +27,12 @@ export interface SupervisorOptions {
   onTrace?: (step: AgentTraceStep) => void;
   /** Test seam: force every agent down its deterministic path. */
   disableLlm?: boolean;
+  /**
+   * Prior turns of this conversation, oldest first, excluding the current
+   * query. Lets follow-ups like "and for mining?" resolve against what was
+   * already asked and answered instead of being read as a brand-new question.
+   */
+  history?: ConversationTurn[];
 }
 
 function makeTraceId(prefix: string): string {
@@ -70,6 +81,33 @@ export async function runSupervisorLoop(
   pushTrace(startTrace);
 
   try {
+    // ---- 0. Context resolution -------------------------------------------
+    // Follow-ups like "and for mining?" or "what about last quarter?" only
+    // make sense against the prior turns. The most recent user turn is the
+    // strongest carrier of missing context (sector, metric basis, time
+    // frame), so it is prepended to the query for the deterministic routers,
+    // which are pure keyword matchers. LLM prompts receive the full history
+    // instead, where the model can weigh it properly.
+    const history = options.history ?? [];
+    const lastUserTurn = [...history].reverse().find((turn) => turn.role === "user")?.content;
+    const hasAnaphora =
+      /\b(and|also|what about|how about|for (that|the same)|same (sector|period|window)|again)\b/i.test(
+        query
+      ) || /^(and|also|what about|how about)\b/i.test(query.trim());
+    const contextQuery = hasAnaphora && lastUserTurn ? `${lastUserTurn} — ${query}` : query;
+
+    if (contextQuery !== query) {
+      pushTrace({
+        id: makeTraceId("trace_sup_context"),
+        role: "supervisor",
+        title: "Supervisor resolved follow-up against conversation context",
+        timestamp: new Date().toISOString(),
+        content: `Follow-up detected. Interpreted "${query}" in the context of the prior question "${lastUserTurn}".`,
+        status: "completed",
+        metadata: { resolvedQuery: contextQuery },
+      });
+    }
+
     // ---- 1. Data Steward -------------------------------------------------
     budget.recordSupervisorStep();
     const stewardVerdict = runDataSteward(
@@ -82,22 +120,27 @@ export async function runSupervisorLoop(
 
     // ---- 2. Clarifier ----------------------------------------------------
     budget.recordSupervisorStep();
-    const { verdict: clarifierVerdict, trace: clarifierTrace } = await runClarifierWithLlm(query, {
-      disableLlm: options.disableLlm,
-    });
+    const { verdict: clarifierVerdict, trace: clarifierTrace } = await runClarifierWithLlm(
+      contextQuery,
+      {
+        disableLlm: options.disableLlm,
+        history,
+      }
+    );
     pushTrace(clarifierTrace);
 
     // ---- 3. Planner ------------------------------------------------------
     budget.recordSupervisorStep();
-    const { plan, trace: plannerTrace } = await createAnalystPlan(query, {
+    const { plan, trace: plannerTrace } = await createAnalystPlan(contextQuery, {
       asOfDate: options.asOfDate,
       disableLlm: options.disableLlm,
+      history,
     });
     pushTrace(plannerTrace);
 
     // ---- 4. Analyst (first pass) ----------------------------------------
     budget.recordSupervisorStep();
-    let analystResult = await runAnalyst(query, options.deals, options.workOrders, budget, {
+    let analystResult = await runAnalyst(contextQuery, options.deals, options.workOrders, budget, {
       asOfDate: options.asOfDate,
       plan,
     });
@@ -126,7 +169,7 @@ export async function runSupervisorLoop(
     // failing if the budget runs out mid-revision.
     let narration = await runNarratorWithLlm(
       {
-        query,
+        query: contextQuery,
         factSheets: analystResult.factSheets,
         assumptions: combinedAssumptions,
         caveats: combinedCaveats,

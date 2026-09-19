@@ -131,20 +131,19 @@ Generate the token in monday.com under **Avatar → Administration → API → P
 
 Copy `.env.example` → `.env.local`. Every variable and its behaviour when absent:
 
-| Variable                                                                 | Required | Absent behaviour                                                                                                                                                                                                    |
-| ------------------------------------------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MONDAY_API_TOKEN`                                                       | ✅       | live reads refused with an explicit warning; cache/stale snapshots still served                                                                                                                                     |
-| `MONDAY_DEALS_BOARD_ID`                                                  | ✅       | same as above (`DEALS_BOARD_ID` also accepted for backwards compatibility)                                                                                                                                          |
-| `MONDAY_WORK_ORDERS_BOARD_ID`                                            | ✅       | same as above (`WORK_ORDERS_BOARD_ID` also accepted)                                                                                                                                                                |
-| `MONDAY_API_VERSION`                                                     | –        | defaults to `2024-10`                                                                                                                                                                                               |
-| `MONDAY_DATA_SOURCE`                                                     | –        | `graphql` (default) or `mcp`                                                                                                                                                                                        |
-| `MONDAY_MCP_SERVER_URL`                                                  | –        | defaults to `https://mcp.monday.com/mcp`                                                                                                                                                                            |
-| `GEMINI_API_KEY` / `GLM_API_KEY` / `GROQ_API_KEY` / `OPENROUTER_API_KEY` | –        | the agent runs the **deterministic degraded path** (router + template narration) and the health endpoint reports `degraded`; the failover chain is Gemini → GLM → Groq → OpenRouter, first configured provider wins |
-| `GEMINI_MODEL` / `GLM_MODEL` / `GROQ_MODEL` / `OPENROUTER_MODEL`         | –        | sensible per-provider defaults                                                                                                                                                                                      |
-| `AS_OF_DATE`                                                             | –        | `auto` (default) anchors to the dataset end, `2026-03-31`                                                                                                                                                           |
-| `CACHE_TTL_SECONDS`                                                      | –        | defaults to `600`; invalid values fall back to it                                                                                                                                                                   |
-| `LLM_TIMEOUT_MS`                                                         | –        | per-provider call timeout, default `12000`                                                                                                                                                                          |
-| `NEXT_PUBLIC_APP_NAME`                                                   | –        | UI display name                                                                                                                                                                                                     |
+| Variable                                                         | Required | Absent behaviour                                                                |
+| ---------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------- |
+| `MONDAY_API_TOKEN`                                               | ✅       | live reads refused with an explicit warning; cache/stale snapshots still served |
+| `MONDAY_DEALS_BOARD_ID`                                          | ✅       | same as above (`DEALS_BOARD_ID` also accepted for backwards compatibility)      |
+| `MONDAY_WORK_ORDERS_BOARD_ID`                                    | ✅       | same as above (`WORK_ORDERS_BOARD_ID` also accepted)                            |
+| `MONDAY_API_VERSION`                                             | –        | defaults to `2024-10`                                                           |
+| `MONDAY_DATA_SOURCE`                                             | –        | `graphql` (default) or `mcp`                                                    |
+| `MONDAY_MCP_SERVER_URL`                                          | –        | defaults to `https://mcp.monday.com/mcp`                                        |     | `GEMINI_API_KEY` / `GLM_API_KEY` / `GROQ_API_KEY` / `OPENROUTER_API_KEY` | –   | the agent runs the **deterministic degraded path** (router + template narration) and the health endpoint reports `degraded`; the failover chain is Gemini → GLM → Groq → OpenRouter, first configured provider wins (with no Gemini key the chain effectively starts at GLM) |
+| `GEMINI_MODEL` / `GLM_MODEL` / `GROQ_MODEL` / `OPENROUTER_MODEL` | –        | sensible per-provider defaults                                                  |
+| `AS_OF_DATE`                                                     | –        | `auto` (default) anchors to the dataset end, `2026-03-31`                       |
+| `CACHE_TTL_SECONDS`                                              | –        | defaults to `600`; invalid values fall back to it                               |
+| `LLM_TIMEOUT_MS`                                                 | –        | per-provider call timeout, default `12000`                                      |
+| `NEXT_PUBLIC_APP_NAME`                                           | –        | UI display name                                                                 |
 
 Secrets never enter the repo: `.env.local` is git-ignored, CI runs gitleaks, and provider error strings never echo request bodies (which contain keys).
 
@@ -168,7 +167,7 @@ npm run dev
 
 ### 6. CI/CD
 
-GitHub Actions (`.github/workflows/ci.yml`) gates every push and PR: gitleaks secret scan → advisory `npm audit` → Prettier check → ESLint → `tsc --noEmit` → Vitest with coverage thresholds → production build. A separate workflow runs the deployment smoke test on `deployment_status`. Installs use `npm ci` with npm caching.
+GitHub Actions (`.github/workflows/ci.yml`) gates every push and PR: secret scan (gitleaks, **advisory** — flagged via `continue-on-error`, not a blocking gate) → advisory `npm audit` → Prettier check → ESLint → `tsc --noEmit` → Vitest with coverage thresholds → production build. A separate workflow runs the deployment smoke test on `deployment_status`. Installs use `npm ci` with npm caching.
 
 ---
 
@@ -235,7 +234,7 @@ _Known slowness:_ the transport tests exercise the real exponential-backoff ladd
 - **In-memory TTL cache**: a Vercel cold start loses the snapshot; a durable store is the first thing to add with more time (see DECISION_LOG §9).
 - **No historical snapshots**: week-over-week trends cannot be computed and are deliberately not estimated — the Exec Brief states this.
 - **Masked ≈₹1 values are excluded from all sums** and reported as undisclosed rather than approximated.
-- **Session-scoped chat**: context lives in the browser session; no persistent chat-log storage (not required by the brief, avoids privacy burden).
+- **Session-scoped chat**: the client sends prior turns with each question so follow-ups and clarifier-chip answers resolve against the original intent; no persistent chat-log storage (not required by the brief, avoids privacy burden).
 
 ## 🧭 Known limitations
 

@@ -549,6 +549,56 @@ describe("Supervisor loop and grounded narration", () => {
     expect(seen).toContain("critic");
   });
 
+  it("resolves an anaphoric follow-up against the prior user turn", async () => {
+    const seen: Array<{ query: string; context: string | undefined }> = [];
+    // Spy on planner routing via the analyst's executed tools is indirect; the
+    // direct observable is the supervisor's context-resolution trace.
+    const result = await runSupervisorLoop("and for mining?", {
+      deals,
+      workOrders,
+      report: EMPTY_REPORT,
+      asOfDate: "2026-03-31",
+      disableLlm: true,
+      history: [
+        { role: "user", content: "What is our open pipeline in Renewables?" },
+        { role: "assistant", content: "Open pipeline in Renewables is ₹10.00 L." },
+      ],
+      onTrace: (step) => {
+        if (step.role === "supervisor" && step.metadata?.resolvedQuery) {
+          seen.push({
+            query: String(step.metadata.resolvedQuery),
+            context: undefined,
+          });
+        }
+      },
+    });
+
+    // The follow-up must have been expanded with the prior turn, not read cold.
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen[0].query).toContain("Renewables");
+    expect(seen[0].query).toContain("and for mining?");
+    expect(result.answer.length).toBeGreaterThan(0);
+  });
+
+  it("does not alter a self-contained question even when history exists", async () => {
+    const seen: string[] = [];
+    await runSupervisorLoop("what is our open pipeline", {
+      deals,
+      workOrders,
+      report: EMPTY_REPORT,
+      asOfDate: "2026-03-31",
+      disableLlm: true,
+      history: [{ role: "user", content: "What is our open pipeline in Renewables?" }],
+      onTrace: (step) => {
+        if (step.role === "supervisor" && step.metadata?.resolvedQuery) {
+          seen.push(String(step.metadata.resolvedQuery));
+        }
+      },
+    });
+
+    expect(seen.length).toBe(0);
+  });
+
   it("carries loader warnings through to the answer's caveats", async () => {
     const result = await runSupervisorLoop("what is our open pipeline", {
       deals,
