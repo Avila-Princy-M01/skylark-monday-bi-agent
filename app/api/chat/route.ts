@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
           lastSyncedAt: data.lastSyncedAt,
           asOfDate: body.asOfDate,
           warnings: data.warnings,
+          history: body.history,
           onTrace: (step) => send("trace", step),
         });
 

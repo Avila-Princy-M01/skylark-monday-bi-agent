@@ -140,6 +140,8 @@ export function runClarifier(query: string): {
 export interface LlmClarifierOptions {
   /** Test seam: force the deterministic clarifier. */
   disableLlm?: boolean;
+  /** Prior conversation turns, so follow-up answers aren't re-clarified. */
+  history?: Array<{ role: "user" | "assistant"; content: string }>;
 }
 
 /**
@@ -157,10 +159,20 @@ export async function runClarifierWithLlm(
     return deterministic;
   }
 
+  const history = options.history ?? [];
+  const historyBlock =
+    history.length > 0
+      ? `\n\nConversation so far (oldest first):\n${history
+          .map((turn) => `${turn.role === "user" ? "User" : "Agent"}: ${turn.content}`)
+          .join(
+            "\n"
+          )}\n\nTreat the new question as a continuation of this conversation: resolve "it", "that", "and for X?"-style follow-ups against the earlier turns, and do NOT re-ask something the user has already answered.`
+      : "";
+
   const result = await completeJson(
     [
       { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: query },
+      { role: "user", content: `${query}${historyBlock}` },
     ],
     ClarifierSchema,
     { temperature: 0 }

@@ -136,11 +136,19 @@ export default function HomePage() {
     setLoading(true);
     streamBuffer.current = "";
 
+    // Conversation context: everything before this turn, oldest first. Lets the
+    // server resolve follow-ups like "and for mining?" or a clarifier-chip
+    // answer against the question that prompted them.
+    const history = messages
+      .filter((msg) => !msg.streaming && msg.text && !msg.text.startsWith("[SYSTEM FAULT]"))
+      .slice(-12)
+      .map((msg) => ({ role: msg.sender, content: msg.text }));
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q }),
+        body: JSON.stringify({ query: q, history }),
       });
 
       if (!res.ok || !res.body) {

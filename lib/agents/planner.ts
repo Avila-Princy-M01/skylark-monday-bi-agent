@@ -151,6 +151,8 @@ export interface PlanOptions {
   asOfDate?: string;
   /** Test seam: force deterministic planning. */
   disableLlm?: boolean;
+  /** Prior conversation turns, so follow-ups inherit the earlier intent. */
+  history?: Array<{ role: "user" | "assistant"; content: string }>;
 }
 
 export async function createAnalystPlan(
@@ -164,10 +166,20 @@ export async function createAnalystPlan(
   let llmWarning: string | undefined;
 
   if (!options.disableLlm && isLlmAvailable()) {
+    const history = options.history ?? [];
+    const historyBlock =
+      history.length > 0
+        ? `\n\nConversation so far (oldest first):\n${history
+            .map((turn) => `${turn.role === "user" ? "User" : "Agent"}: ${turn.content}`)
+            .join(
+              "\n"
+            )}\n\nThe new question may be a follow-up ("and for mining?", "what about last quarter?"). Inherit the sector, metric basis and time frame from the earlier turns that the follow-up does not override.`
+        : "";
+
     const result = await completeJson(
       [
         { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: query },
+        { role: "user", content: `${query}${historyBlock}` },
       ],
       PlanSchema,
       { temperature: 0 }
