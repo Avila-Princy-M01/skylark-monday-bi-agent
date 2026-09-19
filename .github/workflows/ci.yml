@@ -1,0 +1,54 @@
+name: Strict Quality & Best Practices CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  code-quality-and-determinism:
+    name: Code Quality, Determinism & Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: 1. Code Formatting Check (Prettier)
+        run: npm run format:check
+
+      - name: 2. Strict Type Safety Check (TypeScript tsc)
+        run: npm run typecheck
+
+      - name: 3. Static Code Analysis & Linting (ESLint)
+        run: npm run lint
+
+      - name: 4. Security Audit (npm audit)
+        run: npm audit --audit-level=high
+
+      - name: 5. Deterministic Unit Tests & Coverage (Vitest)
+        run: npm run test:coverage
+
+      - name: 6. Next.js Production Build Validation
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+          # Stubs for CI build validation
+          MONDAY_API_TOKEN: "ci_token_test_stub"
+          DEALS_BOARD_ID: "1111111111"
+          WORK_ORDERS_BOARD_ID: "2222222222"
