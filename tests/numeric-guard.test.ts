@@ -81,4 +81,29 @@ describe("Numeric Grounding Guard & Anti-Hallucination Bot", () => {
     expect(rendered).toContain("73.1");
     expect(rendered).toContain("Masked values excluded");
   });
+
+  it("handles negative financial adjustments correctly without false ungrounded flags", () => {
+    const stuckMoneyFactSheet: MetricFactSheet = {
+      numbers: {
+        wonDealsValueExclGst: 95000000,
+        overBilledNegativeAdjustment: -108312,
+        uncollectedArValueInclGst: 36300000,
+      },
+      sourceRowIds: ["deal_1"],
+      rowsScanned: 513,
+      assumptions: [],
+      caveats: [],
+      asOfDate: "2026-03-31",
+      fiscalYear: "FY25-26",
+    };
+
+    const proseWithNegative =
+      "Won deals stand at ₹9.50 Cr with an over-billed negative adjustment of 108312 and uncollected AR of ₹3.63 Cr.";
+    const result = validateNumericGrounding(proseWithNegative, [stuckMoneyFactSheet]);
+    expect(result.isGrounded).toBe(true);
+    expect(result.unverifiedNumbers).toEqual([]);
+
+    const rendered = renderDeterministicFallback([stuckMoneyFactSheet]);
+    expect(rendered).toContain("-₹1.08 L");
+  });
 });

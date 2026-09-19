@@ -34,7 +34,9 @@ export function extractNumbersFromProse(text: string): string[] {
     .replace(/\bNo\.\s*\d+\b/gi, " ")
     .replace(/\b\d+\s*:\s*\d+\b/g, " ");
 
-  const matches = sanitized.match(/(?:₹\s*)?[\d,]+(?:\.\d+)?(?:\s*(?:Cr|L|lakh|crore|%|k|M))?/gi);
+  const matches = sanitized.match(
+    /(?:₹\s*|[-−]\s*)?[\d,]+(?:\.\d+)?(?:\s*(?:Cr|L|lakh|crore|%|k|M))?/gi
+  );
   if (!matches) return [];
   return matches
     .map((m) => m.trim())
@@ -45,27 +47,29 @@ export function extractNumbersFromProse(text: string): string[] {
  * Normalizes an extracted token to standard numeric value
  */
 export function parseTokenToNumber(token: string): number | null {
-  const clean = token.replace(/₹|,|\s/g, "").toLowerCase();
+  const isNegative = token.includes("-") || token.includes("−");
+  const clean = token.replace(/[-−₹,\s]/g, "").toLowerCase();
+  let v: number;
 
   if (clean.endsWith("%")) {
-    const v = parseFloat(clean.slice(0, -1));
-    return isNaN(v) ? null : v;
+    v = parseFloat(clean.slice(0, -1));
+    return isNaN(v) ? null : isNegative ? -v : v;
   }
   if (clean.endsWith("cr") || clean.endsWith("crore")) {
-    const v = parseFloat(clean.replace(/cr|crore/g, ""));
-    return isNaN(v) ? null : v * 10000000;
+    v = parseFloat(clean.replace(/cr|crore/g, ""));
+    return isNaN(v) ? null : (isNegative ? -v : v) * 10000000;
   }
   if (clean.endsWith("l") || clean.endsWith("lakh")) {
-    const v = parseFloat(clean.replace(/l|lakh/g, ""));
-    return isNaN(v) ? null : v * 100000;
+    v = parseFloat(clean.replace(/l|lakh/g, ""));
+    return isNaN(v) ? null : (isNegative ? -v : v) * 100000;
   }
   if (clean.endsWith("k")) {
-    const v = parseFloat(clean.replace(/k/g, ""));
-    return isNaN(v) ? null : v * 1000;
+    v = parseFloat(clean.replace(/k/g, ""));
+    return isNaN(v) ? null : (isNegative ? -v : v) * 1000;
   }
 
-  const v = parseFloat(clean);
-  return isNaN(v) ? null : v;
+  v = parseFloat(clean);
+  return isNaN(v) ? null : isNegative ? -v : v;
 }
 
 /**
@@ -89,6 +93,8 @@ export function validateNumericGrounding(
       for (const val of Object.values(fs.numbers)) {
         if (typeof val === "number") {
           factSheetNumbers.push(val);
+          factSheetNumbers.push(Math.abs(val));
+          factSheetNumbers.push(-Math.abs(val));
         }
       }
     }
@@ -136,12 +142,14 @@ export function validateNumericGrounding(
       continue;
     }
 
-    // Check if within 3% margin of any factSheet number (accounting for rounding in prose)
+    // Check if within 3% margin of any factSheet number (accounting for rounding in prose and sign conventions)
     const matched = factSheetNumbers.some((num) => {
       if (num === 0 && parsed === 0) return true;
       if (num === 0) return false;
-      const relDiff = Math.abs(num - parsed) / Math.abs(num);
-      return relDiff <= 0.03 || Math.abs(num - parsed) < 1.0;
+      const absNum = Math.abs(num);
+      const absParsed = Math.abs(parsed);
+      const relDiff = Math.abs(absNum - absParsed) / absNum;
+      return relDiff <= 0.03 || Math.abs(absNum - absParsed) < 1.0;
     });
 
     if (matched) {
@@ -173,7 +181,12 @@ export function renderDeterministicFallback(factSheets: MetricFactSheet[]): stri
       `Scope: ${fs.fiscalYear} (As of ${fs.asOfDate}, ${fs.rowsScanned} records audited)\n`
     );
     for (const [k, v] of Object.entries(fs.numbers)) {
-      const formatted = typeof v === "number" && v > 1000 ? formatInr(v) : String(v);
+      let formatted: string;
+      if (typeof v === "number" && Math.abs(v) >= 1000) {
+        formatted = v < 0 ? `-${formatInr(Math.abs(v))}` : formatInr(v);
+      } else {
+        formatted = String(v);
+      }
       lines.push(`• ${k}: ${formatted}`);
     }
     lines.push("");
