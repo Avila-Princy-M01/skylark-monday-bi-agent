@@ -175,9 +175,49 @@ export async function runAnalyst(
     selfCorrections.push(message);
 
     if (budget.recordAnalystToolCall()) {
-      const widened = await tools.get_pipeline_health.execute({ asOfDate: asOf });
-      factSheets.push(widened.factSheet);
-      executedToolNames.push("get_pipeline_health (widened)");
+      const widenedArgs = { sector: undefined, asOfDate: asOf };
+      let widenedExec: ToolExecution | undefined;
+      switch (plan.primaryTool) {
+        case "get_revenue_metrics": {
+          const res = await tools.get_revenue_metrics.execute(widenedArgs);
+          widenedExec = { factSheet: res.factSheet, isEmpty: res.workOrderCount === 0 };
+          break;
+        }
+        case "get_pipeline_health": {
+          const res = await tools.get_pipeline_health.execute(widenedArgs);
+          widenedExec = { factSheet: res.factSheet, isEmpty: res.openDealsCount === 0 };
+          break;
+        }
+        case "get_stalled_deals": {
+          const res = await tools.get_stalled_deals.execute(widenedArgs);
+          widenedExec = { factSheet: res.factSheet, isEmpty: res.stalledDealsCount === 0 };
+          break;
+        }
+        case "get_collections_and_ar": {
+          const res = await tools.get_collections_and_ar.execute(widenedArgs);
+          widenedExec = { factSheet: res.factSheet, isEmpty: res.totalBilledInclGst === 0 };
+          break;
+        }
+        case "get_operational_metrics": {
+          const res = await tools.get_operational_metrics.execute(widenedArgs);
+          widenedExec = { factSheet: res.factSheet, isEmpty: res.totalWorkOrders === 0 };
+          break;
+        }
+      }
+
+      if (widenedExec && !widenedExec.isEmpty) {
+        if (factSheets.length > 0) {
+          factSheets[0] = widenedExec.factSheet;
+        } else {
+          factSheets.push(widenedExec.factSheet);
+        }
+        executedToolNames.push(`${plan.primaryTool} (widened)`);
+      } else {
+        const widened = await tools.get_pipeline_health.execute({ asOfDate: asOf });
+        factSheets.push(widened.factSheet);
+        executedToolNames.push("get_pipeline_health (widened)");
+      }
+
       traces.push({
         id: `trace_analyst_self_correct_${Date.now()}`,
         role: "analyst",

@@ -180,4 +180,28 @@ describe("Multi-Agent Behavioral & Delegation Suite", () => {
     expect(fallback.matchedCategory).toBe("pipeline");
     expect(fallback.answer).toContain("Deterministic Fallback");
   });
+
+  it("Supervisor does not treat natural language queries as fake sector filters and computes non-zero revenue", async () => {
+    const result = await runSupervisorLoop(
+      "Show me contracted vs billed vs collected revenue for FY25-26",
+      {
+        deals: sampleDeals,
+        workOrders: sampleWorkOrders,
+        report: sampleReport,
+        asOfDate: "2026-03-31",
+        disableLlm: true,
+      }
+    );
+
+    const revFactSheet = result.factSheets.find(
+      (fs) => fs.numbers.contractedOrderValueExclGst !== undefined
+    );
+    expect(revFactSheet).toBeDefined();
+    expect(revFactSheet?.numbers.contractedOrderValueExclGst).toBe(1000000);
+    expect(revFactSheet?.numbers.billedAmountExclGst).toBe(800000);
+    expect(revFactSheet?.numbers.collectedAmountInclGst).toBe(500000);
+    expect(revFactSheet?.numbers.workOrderCount).toBe(1);
+    const selfCorrectTrace = result.traces.find((t) => t.title.includes("self-correction"));
+    expect(selfCorrectTrace).toBeUndefined();
+  });
 });

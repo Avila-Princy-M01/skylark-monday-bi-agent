@@ -87,39 +87,59 @@ async function callProvider(
   options: CallOptions,
   fetchImpl: FetchLike
 ): Promise<string> {
-  const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    options.timeoutMs ?? getConfig().llmTimeoutMs
-  );
+  const modelsToTry = [provider.modelName, ...(provider.fallbackModels ?? [])];
+  let lastError: Error | null = null;
 
-  try {
-    const res = await fetchImpl(`${provider.baseURL.replace(/\/$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: {
+  for (let mIdx = 0; mIdx < modelsToTry.length; mIdx++) {
+    const currentModel = modelsToTry[mIdx];
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      options.timeoutMs ?? getConfig().llmTimeoutMs
+    );
+
+    try {
+      const body = { ...buildBody(provider, messages, options), model: currentModel };
+      const headers: Record<string, string> = {
         "Content-Type": "application/json",
         Authorization: `Bearer ${provider.apiKey}`,
-      },
-      body: JSON.stringify(buildBody(provider, messages, options)),
-      signal: controller.signal,
-    });
+      };
+      if (provider.providerName === "openrouter") {
+        headers["HTTP-Referer"] = "https://skylark-monday-bi-agent-blush.vercel.app";
+        headers["X-Title"] = "Skylark Drones BI Agent";
+      }
 
-    if (!res.ok) {
-      // Never surface the request body: it can contain the API key.
-      throw new Error(`HTTP ${res.status} ${res.statusText}`);
-    }
+      const res = await fetchImpl(`${provider.baseURL.replace(/\/$/, "")}/chat/completions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
 
-    const json = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string | null } }>;
-    };
-    const content = json.choices?.[0]?.message?.content;
-    if (!content || !content.trim()) {
-      throw new Error("Provider returned an empty completion");
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} ${res.statusText}`);
+      }
+
+      const json = (await res.json()) as {
+        choices?: Array<{ message?: { content?: string | null } }>;
+      };
+      const content = json.choices?.[0]?.message?.content;
+      if (!content || !content.trim()) {
+        throw new Error("Provider returned an empty completion");
+      }
+      return content;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (mIdx < modelsToTry.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        continue;
+      }
+    } finally {
+      clearTimeout(timeout);
     }
-    return content;
-  } finally {
-    clearTimeout(timeout);
   }
+
+  throw lastError ?? new Error("Provider call failed");
 }
 
 /** Extracts the first balanced JSON object from a model response. */
@@ -217,9 +237,11 @@ export async function completeJson<T>(
         meta: { failures, attempts },
       };
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn(`[LLM client] Provider ${provider.providerName} failed: ${errMsg}`);
       failures.push({
         provider: provider.providerName,
-        error: err instanceof Error ? err.message : String(err),
+        error: errMsg,
       });
     }
   }
