@@ -93,10 +93,9 @@ async function callProvider(
   for (let mIdx = 0; mIdx < modelsToTry.length; mIdx++) {
     const currentModel = modelsToTry[mIdx];
     const controller = new AbortController();
-    const timeout = setTimeout(
-      () => controller.abort(),
-      options.timeoutMs ?? getConfig().llmTimeoutMs
-    );
+    const perAttemptTimeout =
+      options.timeoutMs ?? (modelsToTry.length > 1 ? 10000 : getConfig().llmTimeoutMs);
+    const timeout = setTimeout(() => controller.abort(), perAttemptTimeout);
 
     try {
       const body = { ...buildBody(provider, messages, options), model: currentModel };
@@ -196,9 +195,9 @@ export async function completeText(
     try {
       const text = await callProvider(provider, messages, options, fetchImpl);
       return { text, provider: provider.providerName, model: provider.modelName };
-    } catch {
-      // Swallow and try the next provider. Failures are intentionally not logged
-      // here: provider error strings can echo request bodies containing keys.
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn(`[LLM client] Provider ${provider.providerName} failed: ${errMsg}`);
     }
   }
 

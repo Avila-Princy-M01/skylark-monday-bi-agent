@@ -97,11 +97,16 @@ export function getLlmProviderChain(): LlmProviderName[] {
 
   const geminiKey = firstEnv("GEMINI_API_KEY", "GOOGLE_API_KEY");
   if (geminiKey) {
-    const primaryModel = firstEnv("GEMINI_MODEL") || "gemini-3.6-flash";
+    const primaryModel = firstEnv("GEMINI_MODEL") || "gemini-3.5-flash";
+    const possibleFallbacks = [
+      "gemini-3.5-flash-lite",
+      "gemini-3.1-flash-lite",
+      "gemini-3.7-flash",
+    ];
     chain.push({
       providerName: "gemini",
       modelName: primaryModel,
-      fallbackModels: primaryModel !== "gemini-flash-latest" ? ["gemini-flash-latest"] : [],
+      fallbackModels: possibleFallbacks.filter((m) => m !== primaryModel),
       apiKey: geminiKey,
       baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
     });

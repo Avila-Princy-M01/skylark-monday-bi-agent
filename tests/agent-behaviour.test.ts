@@ -204,4 +204,23 @@ describe("Multi-Agent Behavioral & Delegation Suite", () => {
     const selfCorrectTrace = result.traces.find((t) => t.title.includes("self-correction"));
     expect(selfCorrectTrace).toBeUndefined();
   });
+
+  it("Supervisor handles stuck money queries cleanly without negative adjustment hallucination flags", async () => {
+    const result = await runSupervisorLoop(
+      "Where is the money stuck across won deals, unbilled backlog, and uncollected AR?",
+      {
+        deals: sampleDeals,
+        workOrders: sampleWorkOrders,
+        report: sampleReport,
+        asOfDate: "2026-03-31",
+        disableLlm: true,
+      }
+    );
+
+    expect(result.answer).toBeDefined();
+    const criticTraces = result.traces.filter((t) => t.role === "critic");
+    for (const trace of criticTraces) {
+      expect(trace.content).not.toContain("Hallucination/Ungrounded numbers detected: 108312");
+    }
+  });
 });
