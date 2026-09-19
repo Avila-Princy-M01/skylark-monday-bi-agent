@@ -80,6 +80,12 @@ export function planDeterministically(query: string): AnalystPlan {
   if (q.includes("stalled") || q.includes("aging") || q.includes("overdue")) {
     primaryTool = "get_stalled_deals";
     supportingTools.push("get_pipeline_health");
+  } else if (q.includes("concentration") || q.includes("top client") || q.includes("client risk")) {
+    primaryTool = "get_concentration_risk";
+    supportingTools.push("get_pipeline_health");
+  } else if (q.includes("stuck") || q.includes("conversion") || q.includes("trapped")) {
+    primaryTool = "get_stuck_money_analysis";
+    supportingTools.push("get_pipeline_health", "get_collections_and_ar");
   } else if (
     q.includes("collection") ||
     q.includes("receivable") ||
@@ -106,12 +112,6 @@ export function planDeterministically(query: string): AnalystPlan {
   ) {
     primaryTool = "get_operational_metrics";
     supportingTools.push("get_revenue_metrics");
-  } else if (q.includes("concentration") || q.includes("top client") || q.includes("client risk")) {
-    primaryTool = "get_concentration_risk";
-    supportingTools.push("get_pipeline_health");
-  } else if (q.includes("stuck") || q.includes("conversion") || q.includes("trapped")) {
-    primaryTool = "get_stuck_money_analysis";
-    supportingTools.push("get_pipeline_health", "get_collections_and_ar");
   } else if (
     q.includes("scorecard") ||
     q.includes("cross board") ||
