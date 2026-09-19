@@ -16,6 +16,35 @@ export interface ToolContext {
   asOfDate?: string;
 }
 
+/**
+ * The deterministic metric toolbelt.
+ *
+ * These names are the contract between the LLM planner and the analytics
+ * engine: the model may choose which of these to run and in what order, but
+ * every number they return is computed in plain TypeScript.
+ */
+export const METRIC_TOOL_NAMES = [
+  "get_pipeline_health",
+  "get_stalled_deals",
+  "get_revenue_metrics",
+  "get_collections_and_ar",
+  "get_operational_metrics",
+  "get_cross_board_scorecards",
+  "get_concentration_risk",
+  "get_stuck_money_analysis",
+] as const;
+
+export type MetricToolName = (typeof METRIC_TOOL_NAMES)[number];
+
+/** Tools that accept a sector filter. */
+export const SECTOR_AWARE_TOOLS: MetricToolName[] = [
+  "get_pipeline_health",
+  "get_stalled_deals",
+  "get_revenue_metrics",
+  "get_collections_and_ar",
+  "get_operational_metrics",
+];
+
 export const PipelineHealthInputSchema = z.object({
   sector: z
     .array(z.string())

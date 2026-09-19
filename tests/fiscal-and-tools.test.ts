@@ -6,9 +6,10 @@ import {
   resolveIndianFiscalWindow,
 } from "../lib/query/fiscal";
 import { createDeterministicToolRegistry } from "../lib/tools/registry";
-import { getAvailableProviderChain, createLanguageModel } from "../lib/llm/providers";
+import { isLlmAvailable, completeJson } from "../lib/llm/client";
 import { resolveOwnerCode } from "../lib/query/aliases";
 import { Deal, WorkOrder } from "../lib/data/types";
+import { z } from "zod";
 
 describe("Fiscal Semantics & Tool Registry Coverage Suite", () => {
   const sampleDeals: Deal[] = [
@@ -143,13 +144,15 @@ describe("Fiscal Semantics & Tool Registry Coverage Suite", () => {
     expect(stuck.totalBilledValueExclGst).toBe(800000);
   });
 
-  it("provides available LLM provider chain and returns mock model gracefully", () => {
-    const chain = getAvailableProviderChain();
-    expect(chain.length).toBeGreaterThan(0);
-    expect(chain.some((p) => p.providerName === "mock")).toBe(true);
+  it("degrades to null when no LLM provider is configured, so the runtime never needs the AI SDK", async () => {
+    expect(isLlmAvailable()).toBe(false);
 
-    const mockModel = createLanguageModel({ providerName: "mock", modelName: "mock" });
-    expect(mockModel).toBeNull();
+    const result = await completeJson(
+      [{ role: "user", content: "hi" }],
+      z.object({ count: z.number() })
+    );
+
+    expect(result).toBeNull();
   });
 
   it("resolves owner codes consistently", () => {

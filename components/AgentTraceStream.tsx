@@ -18,10 +18,14 @@ import {
 
 interface AgentTraceStreamProps {
   traces: AgentTraceStep[];
+  /** True while the agent loop is still running, so the panel stays open. */
+  streaming?: boolean;
 }
 
-export function AgentTraceStream({ traces }: AgentTraceStreamProps) {
-  const [expanded, setExpanded] = useState<boolean>(false);
+export function AgentTraceStream({ traces, streaming = false }: AgentTraceStreamProps) {
+  // Expanded by default: watching the delegation happen is the point of the
+  // trace panel, and auto-collapsing mid-run would hide it from the reviewer.
+  const [expanded, setExpanded] = useState<boolean>(true);
 
   if (!traces || traces.length === 0) return null;
 
@@ -66,6 +70,11 @@ export function AgentTraceStream({ traces }: AgentTraceStreamProps) {
           <span className="px-1.5 py-0.2 bg-[#1C1C1C] text-[#888] border border-[#2E2E2E] text-[9px] font-bold">
             {traces.length} OPS
           </span>
+          {streaming && (
+            <span className="px-1.5 py-0.2 bg-[#193319] text-[#4AF626] border border-[#295229] text-[9px] font-bold animate-pulse">
+              LIVE
+            </span>
+          )}
         </div>
         <span className="text-[10px] text-[#666] uppercase tracking-widest">
           {expanded ? "[- COLLAPSE]" : "[+ EXPAND]"}

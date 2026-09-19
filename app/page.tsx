@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Terminal,
@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Crosshair,
   ChevronRight,
+  Activity,
 } from "lucide-react";
 import { AgentTraceStream } from "@/components/AgentTraceStream";
 import { DataHealthModal } from "@/components/DataHealthModal";
@@ -26,20 +27,32 @@ interface ChatMessage {
   sourceRowIds?: string[];
   clarifyingVerdict?: ClarifierVerdict;
   isDegradedFallback?: boolean;
+  revisionPasses?: number;
+  streaming?: boolean;
+}
+
+interface DataSourceInfo {
+  source: string;
+  isStale: boolean;
+  lastSyncedAt: string;
+  warnings: string[];
+  mondayError: string | null;
+  dealsCount: number;
+  workOrdersCount: number;
 }
 
 const STARTER_TELEMETRY_QUERIES = [
   {
     label: "PIPELINE_STALL_SCAN",
-    query: "What is our open pipeline and how much is stalled past as-of date?",
+    query: "What is our open pipeline and how much is stalled past the as-of date?",
   },
   {
     label: "REVENUE_RECOGNITION",
-    query: "Show me pre-tax contracted vs recognized billed vs cash collected for FY25-26",
+    query: "Show me contracted vs billed vs collected revenue for FY25-26",
   },
   {
     label: "AR_AGING_EXPOSURE",
-    query: "What is our collection efficiency and top 10 AR-risk accounts?",
+    query: "What is our collection efficiency and top AR-risk accounts?",
   },
   {
     label: "STUCK_CAPITAL_AUDIT",
@@ -59,26 +72,69 @@ const STARTER_TELEMETRY_QUERIES = [
   },
 ];
 
+/** Parses one SSE frame ("event: x\ndata: {...}") into its parts. */
+function parseFrame(frame: string): { event: string; data: unknown } | null {
+  let event = "message";
+  const dataLines: string[] = [];
+
+  for (const line of frame.split("\n")) {
+    if (line.startsWith("event:")) event = line.slice(6).trim();
+    else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+  }
+
+  if (dataLines.length === 0) return null;
+
+  try {
+    return { event, data: JSON.parse(dataLines.join("\n")) };
+  } catch {
+    return null;
+  }
+}
+
 export default function HomePage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [resyncing, setResyncing] = useState<boolean>(false);
-  const [lastSyncedAt, setLastSyncedAt] = useState<string>(new Date().toISOString());
+  const [lastSyncedAt, setLastSyncedAt] = useState<string>("");
+  const [dataSource, setDataSource] = useState<DataSourceInfo | null>(null);
+  const streamBuffer = useRef<string>("");
+
+  /** Applies an update to the in-flight assistant message. */
+  const patchStreamingMessage = useCallback((patch: (msg: ChatMessage) => ChatMessage) => {
+    setMessages((prev) => {
+      const next = [...prev];
+      for (let i = next.length - 1; i >= 0; i--) {
+        if (next[i].sender === "assistant" && next[i].streaming) {
+          next[i] = patch(next[i]);
+          break;
+        }
+      }
+      return next;
+    });
+  }, []);
 
   const handleSend = async (queryText?: string) => {
     const q = (queryText || input).trim();
     if (!q || loading) return;
 
-    const userMsg: ChatMessage = {
-      id: `usr_${Date.now()}`,
-      sender: "user",
-      text: q,
-    };
+    const userMsg: ChatMessage = { id: `usr_${Date.now()}`, sender: "user", text: q };
+    const assistantId = `sys_${Date.now()}`;
 
-    setMessages((prev) => [...prev, userMsg]);
+    setMessages((prev) => [
+      ...prev,
+      userMsg,
+      {
+        id: assistantId,
+        sender: "assistant",
+        text: "",
+        traces: [],
+        streaming: true,
+      },
+    ]);
     if (!queryText) setInput("");
     setLoading(true);
+    streamBuffer.current = "";
 
     try {
       const res = await fetch("/api/chat", {
@@ -87,32 +143,82 @@ export default function HomePage() {
         body: JSON.stringify({ query: q }),
       });
 
-      const data = await res.json();
-
-      if (data.lastSyncedAt) {
-        setLastSyncedAt(data.lastSyncedAt);
+      if (!res.ok || !res.body) {
+        const detail = await res.text().catch(() => "");
+        throw new Error(detail || `HTTP ${res.status}`);
       }
 
-      const botMsg: ChatMessage = {
-        id: `sys_${Date.now()}`,
-        sender: "assistant",
-        text: data.answer || data.error || "CRITICAL: No telemetry stream returned.",
-        traces: data.traces,
-        caveats: data.caveats,
-        assumptions: data.assumptions,
-        sourceRowIds: data.sourceRowIds,
-        clarifyingVerdict: data.clarifyingVerdict,
-        isDegradedFallback: data.isDegradedFallback,
-      };
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
 
-      setMessages((prev) => [...prev, botMsg]);
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        streamBuffer.current += decoder.decode(value, { stream: true });
+        const frames = streamBuffer.current.split("\n\n");
+        streamBuffer.current = frames.pop() ?? "";
+
+        for (const raw of frames) {
+          const parsed = parseFrame(raw);
+          if (!parsed) continue;
+
+          if (parsed.event === "data-source") {
+            const info = parsed.data as DataSourceInfo;
+            setDataSource(info);
+            if (info.lastSyncedAt) setLastSyncedAt(info.lastSyncedAt);
+          } else if (parsed.event === "trace") {
+            const step = parsed.data as AgentTraceStep;
+            patchStreamingMessage((msg) => ({
+              ...msg,
+              traces: [...(msg.traces ?? []), step],
+            }));
+          } else if (parsed.event === "final") {
+            const final = parsed.data as {
+              answer: string;
+              traces: AgentTraceStep[];
+              assumptions: string[];
+              caveats: string[];
+              sourceRowIds: string[];
+              clarifyingVerdict?: ClarifierVerdict;
+              isDegradedFallback: boolean;
+              revisionPasses: number;
+            };
+            patchStreamingMessage((msg) => ({
+              ...msg,
+              text: final.answer || "No telemetry returned.",
+              traces: final.traces?.length ? final.traces : msg.traces,
+              assumptions: final.assumptions,
+              caveats: final.caveats,
+              sourceRowIds: final.sourceRowIds,
+              clarifyingVerdict: final.clarifyingVerdict,
+              isDegradedFallback: final.isDegradedFallback,
+              revisionPasses: final.revisionPasses,
+              streaming: false,
+            }));
+          } else if (parsed.event === "error") {
+            const err = parsed.data as { message: string };
+            patchStreamingMessage((msg) => ({
+              ...msg,
+              text: `[SYSTEM FAULT] Multi-agent execution halted: ${err.message}`,
+              streaming: false,
+            }));
+          }
+        }
+      }
+
+      // Defensive: never leave a message stuck in the streaming state.
+      patchStreamingMessage((msg) =>
+        msg.streaming
+          ? { ...msg, streaming: false, text: msg.text || "Stream ended without a final answer." }
+          : msg
+      );
     } catch (err) {
-      const errorMsg: ChatMessage = {
-        id: `err_${Date.now()}`,
-        sender: "assistant",
-        text: `[SYSTEM FAULT] Multi-agent execution halted: ${err instanceof Error ? err.message : String(err)}`,
-      };
-      setMessages((prev) => [...prev, errorMsg]);
+      patchStreamingMessage((msg) => ({
+        ...msg,
+        text: `[SYSTEM FAULT] ${err instanceof Error ? err.message : String(err)}`,
+        streaming: false,
+      }));
     } finally {
       setLoading(false);
     }
@@ -123,15 +229,27 @@ export default function HomePage() {
     try {
       const res = await fetch("/api/resync", { method: "POST" });
       const data = await res.json();
-      if (data.lastSyncedAt) {
-        setLastSyncedAt(data.lastSyncedAt);
-      }
+      if (data.lastSyncedAt) setLastSyncedAt(data.lastSyncedAt);
+      setDataSource((prev) =>
+        prev
+          ? {
+              ...prev,
+              source: data.source ?? "live",
+              isStale: false,
+              warnings: data.warnings ?? [],
+              dealsCount: data.dealsCount ?? prev.dealsCount,
+              workOrdersCount: data.workOrdersCount ?? prev.workOrdersCount,
+            }
+          : prev
+      );
     } catch (e) {
       console.error(e);
     } finally {
       setResyncing(false);
     }
   };
+
+  const showDegradedBanner = dataSource && (dataSource.isStale || dataSource.warnings.length > 0);
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-[#EAEAEA] flex flex-col font-mono selection:bg-[#FF2A2A] selection:text-white border-x border-[#1C1C1C] max-w-[1440px] mx-auto">
@@ -147,14 +265,14 @@ export default function HomePage() {
                 SKYLARK // TELEMETRY BI AGENT
               </span>
               <span className="text-[9px] px-1.5 py-0.5 bg-[#1F1F1F] text-[#888] border border-[#2E2E2E] uppercase font-bold">
-                REV 2.0
+                REV 3.0
               </span>
               <span className="text-[9px] px-1.5 py-0.5 bg-[#193319] text-[#4AF626] border border-[#295229] uppercase font-bold">
                 ONLINE
               </span>
             </div>
             <p className="text-[10px] text-[#777] uppercase tracking-wider">
-              DETERMINISTIC MATH ENGINE • ZERO ARITHMETIC DRIFT • MONDAY GRAPHQL
+              DETERMINISTIC MATH ENGINE • ZERO ARITHMETIC DRIFT • MONDAY GRAPHQL / MCP
             </p>
           </div>
         </div>
@@ -166,7 +284,7 @@ export default function HomePage() {
             onClick={handleResync}
             disabled={resyncing}
             className="px-2.5 py-1.5 border border-[#333] bg-[#141414] hover:bg-[#1E1E1E] hover:border-[#555] text-[#BBB] transition text-xs flex items-center gap-1.5 font-bold uppercase tracking-wider"
-            title="Resync Monday.com GraphQL Boards"
+            title="Resync Monday.com boards"
           >
             <RefreshCw
               className={`w-3.5 h-3.5 ${resyncing ? "animate-spin text-[#FF2A2A]" : ""}`}
@@ -184,13 +302,29 @@ export default function HomePage() {
         </div>
       </header>
 
+      {/* Data source / degradation banner */}
+      {showDegradedBanner && dataSource && (
+        <div className="border-b border-[#523E15] bg-[#1F1708] px-4 py-2.5 text-[11px] text-[#FFD666] space-y-1">
+          <div className="flex items-center gap-2 font-bold uppercase tracking-wider text-[10px] text-[#E5A800]">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span>
+              [ DATA SOURCE: {dataSource.source.toUpperCase()} —{" "}
+              {dataSource.isStale ? "STALE" : "OK"} ]
+            </span>
+          </div>
+          {dataSource.warnings.map((warning, index) => (
+            <div key={index} className="pl-5 leading-relaxed">
+              • {warning}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Main Workspace Area */}
       <main className="flex-1 p-4 md:p-6 flex flex-col justify-between max-w-6xl w-full mx-auto">
-        {/* Messages Stream */}
         <div className="space-y-4 flex-1 mb-6">
           {messages.length === 0 ? (
             <div className="py-8 space-y-6">
-              {/* Technical Banner */}
               <div className="border border-[#262626] bg-[#0E0E0E] p-6 space-y-3">
                 <div className="flex items-center justify-between border-b border-[#1E1E1E] pb-2">
                   <div className="flex items-center gap-2 text-[#888] text-[10px] tracking-widest uppercase font-bold">
@@ -202,16 +336,18 @@ export default function HomePage() {
                   </span>
                 </div>
                 <h2 className="text-sm md:text-base font-black tracking-tight text-white uppercase">
-                  AUTONOMOUS COMMERCIAL & OPERATIONAL TELEMETRY
+                  MULTI-AGENT COMMERCIAL & OPERATIONAL TELEMETRY
                 </h2>
                 <p className="text-xs text-[#999] leading-relaxed max-w-3xl">
-                  Query pipeline health, revenue realization, past-PO execution bottlenecks, and
-                  concentration exposures. Every numeric metric is strictly validated by the Critic
-                  against deterministic TypeScript calculation registries.
+                  Six specialised agents collaborate per question: the Data Steward audits freshness
+                  and data quality, the Clarifier resolves ambiguity, the Planner selects
+                  deterministic metrics, the Analyst executes them, the Narrator writes the answer,
+                  and the Critic verifies every figure — sending work back when a number is
+                  ungrounded or the question was only partly answered. The LLM never performs
+                  arithmetic.
                 </p>
               </div>
 
-              {/* Preset Telemetry Inquiries */}
               <div className="space-y-2">
                 <div className="text-[10px] text-[#777] uppercase tracking-widest font-bold flex items-center gap-2">
                   <span>{"///"}</span>
@@ -242,7 +378,6 @@ export default function HomePage() {
                 key={msg.id}
                 className={`flex flex-col gap-1 ${msg.sender === "user" ? "items-end" : "items-start"}`}
               >
-                {/* Message Header Tag */}
                 <div className="text-[9px] text-[#666] tracking-widest uppercase font-bold px-1">
                   {msg.sender === "user" ? "[ OPERATOR INQUIRY ]" : "[ BI TELEMETRY DISPATCH ]"}
                 </div>
@@ -254,10 +389,10 @@ export default function HomePage() {
                       : "bg-[#0E0E0E] border-[#262626] text-[#D8D8D8]"
                   }`}
                 >
-                  {/* Multi-Agent Reasoning Trace */}
-                  {msg.traces && msg.traces.length > 0 && <AgentTraceStream traces={msg.traces} />}
+                  {msg.traces && msg.traces.length > 0 && (
+                    <AgentTraceStream traces={msg.traces} streaming={msg.streaming} />
+                  )}
 
-                  {/* Clarification Alert */}
                   {msg.clarifyingVerdict?.isAmbiguous && msg.clarifyingVerdict.options && (
                     <div className="my-3 p-3 bg-[#1F1708] border border-[#523E15] text-[#FFD666] space-y-2">
                       <div className="flex items-center gap-1.5 font-bold text-[10px] tracking-wider uppercase text-[#E5A800]">
@@ -279,10 +414,34 @@ export default function HomePage() {
                     </div>
                   )}
 
-                  {/* Telemetry Output Text */}
-                  <div className="whitespace-pre-wrap leading-relaxed">{msg.text}</div>
+                  {msg.text ? (
+                    <div className="whitespace-pre-wrap leading-relaxed">{msg.text}</div>
+                  ) : msg.streaming ? (
+                    <div className="flex items-center gap-2 text-[#888] text-[11px] py-2">
+                      <Activity className="w-3.5 h-3.5 animate-pulse text-[#FF2A2A]" />
+                      <span className="uppercase tracking-widest">Agents working…</span>
+                    </div>
+                  ) : null}
 
-                  {/* Grounded Source Rows Drawer */}
+                  {msg.streaming && msg.traces && msg.traces.length === 0 && (
+                    <div className="mt-2 text-[10px] text-[#666] uppercase tracking-widest">
+                      Awaiting first agent step…
+                    </div>
+                  )}
+
+                  {!msg.streaming && msg.revisionPasses !== undefined && msg.revisionPasses > 0 && (
+                    <div className="mt-3 text-[10px] text-[#E5A800] uppercase tracking-widest">
+                      Critic sent work back for {msg.revisionPasses} revision pass(es)
+                    </div>
+                  )}
+
+                  {msg.isDegradedFallback && (
+                    <div className="mt-3 p-2 bg-[#1F1708] border border-[#523E15] text-[#FFD666] text-[10px] uppercase tracking-wider">
+                      Served via deterministic degraded mode — LLM inference unavailable, figures
+                      still computed deterministically.
+                    </div>
+                  )}
+
                   {msg.sourceRowIds && msg.sourceRowIds.length > 0 && (
                     <div className="mt-4 pt-3 border-t border-[#1F1F1F] flex items-center justify-between">
                       <SourceRowDrawer sourceRowIds={msg.sourceRowIds} />
@@ -291,21 +450,6 @@ export default function HomePage() {
                 </div>
               </div>
             ))
-          )}
-
-          {loading && (
-            <div className="border border-[#262626] bg-[#0E0E0E] p-4 flex items-center gap-3 text-xs text-[#888] font-mono animate-pulse">
-              <RefreshCw className="w-4 h-4 animate-spin text-[#FF2A2A]" />
-              <div className="space-y-0.5">
-                <div className="text-[10px] text-[#FF2A2A] font-bold tracking-widest uppercase">
-                  [ PIPELINE EXECUTING ]
-                </div>
-                <div className="text-[11px] text-[#AAA]">
-                  SUPERVISOR ROUTING → DATA STEWARD NORMALIZATION → ANALYST DETERMINISTIC REGISTRY →
-                  CRITIC GROUNDING AUDIT
-                </div>
-              </div>
-            </div>
           )}
         </div>
 

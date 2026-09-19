@@ -1,19 +1,14 @@
 import { MondayApiError, withExponentialBackoff } from "./errors";
 import { RawMondayItem } from "../data/normalize";
+import {
+  MondayBoardSchema,
+  MondayColumnMapping,
+  MondayDataSource,
+  ITEMS_PAGE_LIMIT,
+} from "./source";
 
-export interface MondayBoardSchema {
-  id: string;
-  name: string;
-  columns: Array<{
-    id: string;
-    title: string;
-    type: string;
-  }>;
-}
-
-export interface MondayColumnMapping {
-  [title: string]: string; // Column Title -> Column ID
-}
+// Re-exported for backwards compatibility with existing importers/tests.
+export type { MondayBoardSchema, MondayColumnMapping };
 
 interface PageResponse {
   boards?: Array<{
@@ -28,15 +23,20 @@ interface PageResponse {
   };
 }
 
-export class MondayGraphQLSource {
+export class MondayGraphQLSource implements MondayDataSource {
+  public readonly kind = "graphql" as const;
+
   private apiToken: string;
   private apiVersion: string;
   private endpoint = "https://api.monday.com/v2";
 
-  constructor(options: { apiToken?: string; apiVersion?: string } = {}) {
+  constructor(options: { apiToken?: string; apiVersion?: string; fetchImpl?: typeof fetch } = {}) {
     this.apiToken = options.apiToken || process.env.MONDAY_API_TOKEN || "";
-    this.apiVersion = options.apiVersion || "2024-10";
+    this.apiVersion = options.apiVersion || process.env.MONDAY_API_VERSION || "2024-10";
+    this.fetchImpl = options.fetchImpl ?? fetch;
   }
+
+  private fetchImpl: typeof fetch;
 
   private async fetchGraphQL<T>(
     query: string,
@@ -50,21 +50,29 @@ export class MondayGraphQLSource {
     }
 
     return withExponentialBackoff(async () => {
+      // A hard timeout matters on serverless: an unbounded hung request would
+      // otherwise consume the whole function budget and yield a 504.
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+
       let res: Response;
       try {
-        res = await fetch(this.endpoint, {
+        res = await this.fetchImpl(this.endpoint, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: this.apiToken,
+            Authorization: `Bearer ${this.apiToken}`,
             "API-Version": this.apiVersion,
           },
           body: JSON.stringify({ query, variables }),
+          signal: controller.signal,
         });
       } catch (networkErr) {
         throw new MondayApiError("network_error", "Failed to connect to monday.com API", {
           originalError: networkErr,
         });
+      } finally {
+        clearTimeout(timeout);
       }
 
       if (res.status === 401 || res.status === 403) {
@@ -160,7 +168,7 @@ export class MondayGraphQLSource {
       const queryStr: string = cursor
         ? `
           query GetNextItems($cursor: String!) {
-            next_items_page(cursor: $cursor, limit: 100) {
+            next_items_page(cursor: $cursor, limit: ${ITEMS_PAGE_LIMIT}) {
               cursor
               items {
                 id
@@ -177,7 +185,7 @@ export class MondayGraphQLSource {
         : `
           query GetInitialItems($boardIds: [ID!]) {
             boards(ids: $boardIds) {
-              items_page(limit: 100) {
+              items_page(limit: ${ITEMS_PAGE_LIMIT}) {
                 cursor
                 items {
                   id

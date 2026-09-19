@@ -55,7 +55,7 @@ export function computeStuckMoney(
         "Outstanding AR represents cash trapped in unpaid receivables",
       ],
       caveats: [
-        "Won deals from the pipeline board are not 1:1 linked to work order records due to separate entity identifiers.",
+        "Won deals from the pipeline board are not linked one-to-one to work order records due to separate entity identifiers.",
       ],
       asOfDate: asOf,
       fiscalYear: "FY25-26",
