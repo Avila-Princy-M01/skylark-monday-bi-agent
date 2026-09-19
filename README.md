@@ -2,11 +2,11 @@
 
 A hosted multi-agent conversational system that answers founder-level business questions by reading two live monday.com boards (**Deals**, **Work Orders**), normalizing real-world-messy data, computing every figure deterministically in pure TypeScript, and narrating results with explicit assumptions and data-quality caveats.
 
-| Submission link       | URL                                                                                               |
-| --------------------- | ------------------------------------------------------------------------------------------------- |
-| 🌐 Hosted application | `https://<your-app>.vercel.app` _(replace after Vercel deploy)_                                   |
-| 📦 Source repository  | `https://github.com/<your-username>/skylark-monday-bi-agent` _(replace with the public repo URL)_ |
-| 📜 Decision log       | [`DECISION_LOG.md`](./DECISION_LOG.md)                                                            |
+| Submission link       | URL                                                                                                                        |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| 🌐 Hosted application | [https://skylark-monday-bi-agent-blush.vercel.app](https://skylark-monday-bi-agent-blush.vercel.app/)                      |
+| 📦 Source repository  | [https://github.com/Avila-Princy-M01/skylark-monday-bi-agent](https://github.com/Avila-Princy-M01/skylark-monday-bi-agent) |
+| 📜 Decision log       | [`DECISION_LOG.md`](./DECISION_LOG.md)                                                                                     |
 
 > **No dataset values are committed to this repository.** All data is read live from monday.com at runtime via the GraphQL API (or MCP), and the spreadsheets are git-ignored.
 
@@ -238,13 +238,12 @@ _Known slowness:_ the transport tests exercise the real exponential-backoff ladd
 
 ## 🧭 Known limitations
 
-- The hosted deployment is pending — the README link placeholders above are replaced at deploy time.
 - Durable snapshot storage is not implemented; degradation after a cold start is honest-but-empty rather than stale-but-useful.
 - The Critic's re-analysis is bounded to 2 passes; on non-convergence the answer is served with its caveats and `criticRejectedFinal` flagged.
 - Transport tests are slow (~15–20s each) because they exercise the real backoff ladder.
 
 ## 🗺️ Status — completed vs remaining
 
-**Completed:** live monday.com GraphQL + MCP transports with runtime schema discovery and cursor pagination; single normalization layer with a full data-quality report; 8 deterministic metric tools; multi-agent loop (Supervisor / Data Steward / Clarifier / Planner / Analyst / Narrator / Critic) with LLM planning and deterministic fallback; numeric grounding guard; SSE-streamed trace panel; staleness banners and data-health modal; Exec Brief with copy/download/print; 104 hermetic tests with coverage gates; CI/CD with secret scanning and a deployment smoke test; README and DECISION_LOG.
+**Completed:** live monday.com GraphQL + MCP transports with runtime schema discovery and cursor pagination; single normalization layer with a full data-quality report; 8 deterministic metric tools; multi-agent loop (Supervisor / Data Steward / Clarifier / Planner / Analyst / Narrator / Critic) with LLM planning and deterministic fallback; numeric grounding guard; SSE-streamed trace panel; staleness banners and data-health modal; Exec Brief with copy/download/print; 104 hermetic tests with coverage gates; CI/CD with secret scanning and a deployment smoke test; Vercel deployment; README and DECISION_LOG.
 
-**Remaining (with more time):** Vercel deployment + link; durable snapshot store; richer Analyst tool-calling loop; scheduled live-board integration test; golden transcripts from the deployed URL.
+**Remaining (with more time):** durable snapshot store; voice agent interface; richer Analyst tool-calling loop; scheduled live-board integration test; golden transcripts from the deployed URL.
