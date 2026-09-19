@@ -9,7 +9,7 @@ export const DEFAULT_BUDGET_CONFIG: AgentBudgetConfig = {
   maxSupervisorSteps: 5,
   maxAnalystToolCalls: 8,
   maxCriticRevisions: 2,
-  maxWallClockSeconds: 25, // Safely within Vercel 30s Serverless timeout
+  maxWallClockSeconds: 45, // Generous budget for multi-agent LLM roundtrips
 };
 
 export class BudgetTracker {

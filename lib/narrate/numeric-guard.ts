@@ -13,14 +13,25 @@ export interface GroundingValidationResult {
  * Extracts candidate numeric tokens from text, e.g. "₹1.50 Cr", "73.1%", "12,000", "489360", "₹444000"
  */
 export function extractNumbersFromProse(text: string): string[] {
-  // Strip out ISO dates YYYY-MM-DD, DD/MM/YYYY, and FY strings like FY25-26 to avoid date fragments.
-  // Also strip ratio patterns like "1:1" and "3:2" — the guard previously read the leading
-  // digit plus the next word's first letter ("1 l") as a bogus "one lakh" token and rejected
-  // truthful answers containing ratio caveats.
+  // Strip out date fragments, calendar months, fiscal year markers, quarters, ordinals, and list bullets
+  // to avoid false hallucination flags on calendar metadata.
   const sanitized = text
     .replace(/\b\d{4}-\d{2}-\d{2}\b/g, " ")
-    .replace(/\b\d{1,2}[/-]\d{1,2}[/-]\d{4}\b/g, " ")
-    .replace(/\bFY\d{2}-\d{2}\b/gi, " ")
+    .replace(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g, " ")
+    .replace(
+      /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?\b/gi,
+      " "
+    )
+    .replace(
+      /\b\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(?:,?\s+\d{4})?\b/gi,
+      " "
+    )
+    .replace(/\bFY\s*['’]?\d{2,4}(?:[-/]\d{2,4})?\b/gi, " ")
+    .replace(/\bQ[1-4](?:\s*['’]?\d{2,4})?\b/gi, " ")
+    .replace(/\b\d{1,2}(?:st|nd|rd|th)\b/gi, " ")
+    .replace(/(?:^|\n|\.\s+)\d+\.\s+/g, " ")
+    .replace(/#\s*\d+\b/g, " ")
+    .replace(/\bNo\.\s*\d+\b/gi, " ")
     .replace(/\b\d+\s*:\s*\d+\b/g, " ");
 
   const matches = sanitized.match(/(?:₹\s*)?[\d,]+(?:\.\d+)?(?:\s*(?:Cr|L|lakh|crore|%|k|M))?/gi);
@@ -81,6 +92,22 @@ export function validateNumericGrounding(
         }
       }
     }
+    // Also include any numbers from asOfDate (e.g., year, month, day) and fiscalYear
+    if (fs.asOfDate) {
+      const parts = fs.asOfDate
+        .split(/\D+/)
+        .map(Number)
+        .filter((n) => !isNaN(n) && n > 0);
+      factSheetNumbers.push(...parts);
+    }
+    if (fs.fiscalYear) {
+      const parts = fs.fiscalYear
+        .split(/\D+/)
+        .map(Number)
+        .filter((n) => !isNaN(n) && n > 0);
+      factSheetNumbers.push(...parts);
+    }
+
     // Disclosed constants count as grounded context. Assumption lines carry
     // configuration the pipeline itself writes (e.g. "High=0.7, Medium=0.4,
     // Low=0.15" probability weights), so prose repeating those figures must
@@ -99,15 +126,11 @@ export function validateNumericGrounding(
     const parsed = parseTokenToNumber(token);
     if (parsed === null) continue;
 
-    // Filter out common structural counters (1, 2, 3, 4, 5, 2025, 2026, etc.)
+    // Filter out common structural counters (1 through 10, calendar years 2020-2035, 100% scale)
     if (
-      parsed === 2025 ||
-      parsed === 2026 ||
-      parsed === 1 ||
-      parsed === 2 ||
-      parsed === 3 ||
-      parsed === 4 ||
-      parsed === 5
+      (parsed >= 1 && parsed <= 10 && Number.isInteger(parsed)) ||
+      (parsed >= 2020 && parsed <= 2035 && Number.isInteger(parsed)) ||
+      parsed === 100
     ) {
       verified.push(token);
       continue;

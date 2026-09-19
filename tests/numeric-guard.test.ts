@@ -50,6 +50,19 @@ describe("Numeric Grounding Guard & Anti-Hallucination Bot", () => {
     expect(result.unverifiedNumbers.length).toBe(0);
   });
 
+  it("approves natural language prose containing calendar dates, fiscal years, and numbered bullets", () => {
+    const naturalProse = `
+      Executive Summary:
+      As of March 31, 2026, for FY26 Q4, we have audited 2 deals.
+      1. Direct answer: Total open pipeline stands at ₹15.00 L.
+      2. Core performance: Collection efficiency achieved is 73.1%.
+      3. Risk posture: Total outstanding AR is ₹444000.
+    `;
+    const result = validateNumericGrounding(naturalProse, [verifiedFactSheet]);
+    expect(result.isGrounded).toBe(true);
+    expect(result.unverifiedNumbers).toEqual([]);
+  });
+
   it("intercepts and rejects ungrounded hallucinated numbers", () => {
     const hallucinatedProse =
       "Total open value is ₹15.00 L, but we also generated ₹99.50 Cr in phantom pipeline with 99.9% win rate.";
