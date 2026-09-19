@@ -1,4 +1,4 @@
-name: Strict Quality & Best Practices CI/CD Pipeline
+name: Enterprise Parallel CI/CD Quality Pipeline
 
 on:
   push:
@@ -11,16 +11,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  code-quality-and-determinism:
-    name: Code Quality, Determinism & Security Audit
+  # ============================================================================
+  # 1. SECRET SCANNING & LEAK DETECTION (Gitleaks)
+  # ============================================================================
+  security-audit-and-secret-scan:
+    name: 🛡️ Secret Scan & Security Audit
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
+      - name: Run Gitleaks Secret Scanner
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_SUMMARY: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run Security Audit
+        run: npm audit --audit-level=high || true
+
+  # ============================================================================
+  # 2. CODE QUALITY, FORMATTING & LINTING (Parallel)
+  # ============================================================================
+  lint-and-format:
+    name: 🧹 Lint & Formatting Guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js Environment
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -28,26 +57,80 @@ jobs:
       - name: Install Dependencies
         run: npm install --prefer-offline --no-audit
 
-      - name: 1. Code Formatting Check (Prettier)
+      - name: Check Code Formatting (Prettier)
         run: npm run format:check
 
-      - name: 2. Strict Type Safety Check (TypeScript tsc)
-        run: npm run typecheck
-
-      - name: 3. Static Code Analysis & Linting (ESLint)
+      - name: Static Code Analysis (ESLint)
         run: npm run lint
 
-      - name: 4. Security Audit (npm audit)
-        run: npm audit --audit-level=high || true
+  # ============================================================================
+  # 3. STRICT TYPE CHECKING (Parallel)
+  # ============================================================================
+  typecheck:
+    name: 🔷 Strict Type Safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: 5. Deterministic Unit Tests & Coverage (Vitest)
-        run: npm run test:coverage
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
-      - name: 6. Next.js Production Build Validation
+      - name: Install Dependencies
+        run: npm install --prefer-offline --no-audit
+
+      - name: TypeScript Compiler Check
+        run: npm run typecheck
+
+  # ============================================================================
+  # 4. DETERMINISTIC MATH & UNIT TESTS (Parallel)
+  # ============================================================================
+  deterministic-test-suite:
+    name: 🧮 Deterministic Math & Golden Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Dependencies
+        run: npm install --prefer-offline --no-audit
+
+      - name: Run Determinism & Invariant Test Suite
+        run: npm run test
+
+  # ============================================================================
+  # 5. PRODUCTION BUILD & BUNDLE VERIFICATION (Runs after quality gates)
+  # ============================================================================
+  production-build-gate:
+    name: 🚀 Production Build Gate
+    needs: [lint-and-format, typecheck, deterministic-test-suite]
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Dependencies
+        run: npm install --prefer-offline --no-audit
+
+      - name: Build Next.js Application
         run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: 1
-          # Stubs for CI build validation
           MONDAY_API_TOKEN: "ci_token_test_stub"
           DEALS_BOARD_ID: "1111111111"
           WORK_ORDERS_BOARD_ID: "2222222222"
