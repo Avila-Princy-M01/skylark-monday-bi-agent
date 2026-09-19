@@ -23,6 +23,7 @@ export interface MondayConfig {
 export interface LlmProviderName {
   providerName: "gemini" | "glm" | "groq" | "openrouter";
   modelName: string;
+  fallbackModels?: string[];
   apiKey: string;
   baseURL: string;
 }
@@ -96,9 +97,11 @@ export function getLlmProviderChain(): LlmProviderName[] {
 
   const geminiKey = firstEnv("GEMINI_API_KEY", "GOOGLE_API_KEY");
   if (geminiKey) {
+    const primaryModel = firstEnv("GEMINI_MODEL") || "gemini-3.6-flash";
     chain.push({
       providerName: "gemini",
-      modelName: firstEnv("GEMINI_MODEL") || "gemini-2.0-flash",
+      modelName: primaryModel,
+      fallbackModels: primaryModel !== "gemini-flash-latest" ? ["gemini-flash-latest"] : [],
       apiKey: geminiKey,
       baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
     });
@@ -128,7 +131,7 @@ export function getLlmProviderChain(): LlmProviderName[] {
   if (openRouterKey) {
     chain.push({
       providerName: "openrouter",
-      modelName: firstEnv("OPENROUTER_MODEL") || "google/gemini-2.0-flash-001",
+      modelName: firstEnv("OPENROUTER_MODEL") || "nex-agi/nex-n2.5-pro:free",
       apiKey: openRouterKey,
       baseURL: "https://openrouter.ai/api/v1",
     });
@@ -143,7 +146,7 @@ export function getConfig(): AppConfig {
     cacheTtlSeconds: getCacheTtlSeconds(),
     asOfDate: getAsOfDate(),
     llmChain: getLlmProviderChain(),
-    llmTimeoutMs: Number(firstEnv("LLM_TIMEOUT_MS")) || 12000,
+    llmTimeoutMs: Number(firstEnv("LLM_TIMEOUT_MS")) || 20000,
   };
 }
 

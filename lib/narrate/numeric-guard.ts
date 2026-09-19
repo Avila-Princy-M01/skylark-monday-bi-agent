@@ -154,12 +154,12 @@ export function renderDeterministicFallback(factSheets: MetricFactSheet[]): stri
       lines.push(`• ${k}: ${formatted}`);
     }
     lines.push("");
-    if (fs.assumptions.length > 0) {
+    if (fs.assumptions && fs.assumptions.length > 0) {
       lines.push("Assumptions applied:");
       for (const a of fs.assumptions) lines.push(`• ${a}`);
       lines.push("");
     }
-    if (fs.caveats.length > 0) {
+    if (fs.caveats && fs.caveats.length > 0) {
       lines.push("Data caveats:");
       for (const c of fs.caveats) lines.push(`• ${c}`);
       lines.push("");
