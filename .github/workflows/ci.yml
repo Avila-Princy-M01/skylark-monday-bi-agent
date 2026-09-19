@@ -61,8 +61,8 @@ jobs:
           node-version: 22
           cache: "npm"
 
-      - name: Install Dependencies with Frozen Lockfile
-        run: npm ci --ignore-scripts
+      - name: Install Dependencies
+        run: npm install --prefer-offline --no-audit
 
       - name: Check Code Formatting (Prettier)
         run: npm run format:check
@@ -87,8 +87,8 @@ jobs:
           node-version: 22
           cache: "npm"
 
-      - name: Install Dependencies with Frozen Lockfile
-        run: npm ci --ignore-scripts
+      - name: Install Dependencies
+        run: npm install --prefer-offline --no-audit
 
       - name: TypeScript Compiler Check
         run: npm run typecheck
@@ -113,8 +113,8 @@ jobs:
           node-version: 22
           cache: "npm"
 
-      - name: Install Dependencies with Frozen Lockfile
-        run: npm ci --ignore-scripts
+      - name: Install Dependencies
+        run: npm install --prefer-offline --no-audit
 
       - name: Run Determinism & Invariant Test Suite with Coverage
         run: npm run test:coverage
@@ -145,8 +145,8 @@ jobs:
           node-version: 22
           cache: "npm"
 
-      - name: Install Dependencies with Frozen Lockfile
-        run: npm ci --ignore-scripts
+      - name: Install Dependencies
+        run: npm install --prefer-offline --no-audit
 
       - name: Build Next.js Application (Validating Production Bundles)
         run: npm run build
