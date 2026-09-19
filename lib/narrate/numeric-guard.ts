@@ -68,6 +68,12 @@ export function validateNumericGrounding(
   const factSheetNumbers: number[] = [];
 
   for (const fs of factSheets) {
+    if (typeof fs.rowsScanned === "number") {
+      factSheetNumbers.push(fs.rowsScanned);
+    }
+    if (Array.isArray(fs.sourceRowIds)) {
+      factSheetNumbers.push(fs.sourceRowIds.length);
+    }
     if (fs.numbers) {
       for (const val of Object.values(fs.numbers)) {
         if (typeof val === "number") {
