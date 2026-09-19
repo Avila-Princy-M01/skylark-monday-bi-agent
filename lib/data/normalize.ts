@@ -218,6 +218,126 @@ export interface RawMondayItem {
   }>;
 }
 
+export interface RequiredColumnDef {
+  field: string;
+  candidates: string[];
+  severity: "critical" | "warning";
+}
+
+export const REQUIRED_DEALS_COLUMNS: RequiredColumnDef[] = [
+  {
+    field: "dealValue",
+    candidates: ["Masked Deal value", "Deal value", "Deal Value", "numbers_val"],
+    severity: "critical",
+  },
+  {
+    field: "status",
+    candidates: ["Deal Status", "status_deal", "Deal status", "Status"],
+    severity: "critical",
+  },
+  {
+    field: "tentativeCloseDate",
+    candidates: ["Tentative Close Date", "Tentative close date", "date_close_t", "Close Date"],
+    severity: "warning",
+  },
+  {
+    field: "clientCode",
+    candidates: ["Client Code", "Customer Name Code", "text_client", "Client"],
+    severity: "warning",
+  },
+];
+
+export const REQUIRED_WORK_ORDERS_COLUMNS: RequiredColumnDef[] = [
+  {
+    field: "orderValueExclGst",
+    candidates: [
+      "Amount in Rupees (Excl of GST) (Masked)",
+      "Order Value (Excl. GST)",
+      "Order Value (Excl GST)",
+      "Amount (Excl. GST)",
+      "numbers_order_excl",
+    ],
+    severity: "critical",
+  },
+  {
+    field: "billedAmountExclGst",
+    candidates: [
+      "Billed Value in Rupees (Excl of GST.) (Masked)",
+      "Billed Value in Rupees (Excl of GST) (Masked)",
+      "Billed Value (Excl. GST)",
+      "Billed Amount (Excl. GST)",
+      "numbers_billed_excl",
+    ],
+    severity: "critical",
+  },
+  {
+    field: "collectedAmountInclGst",
+    candidates: [
+      "Collected Amount in Rupees (Incl of GST.) (Masked)",
+      "Collected Amount (Incl. GST)",
+      "Collected Amount (Incl GST)",
+      "Collected Amount",
+      "numbers_collected_incl",
+    ],
+    severity: "critical",
+  },
+  {
+    field: "amountToBeBilledExclGst",
+    candidates: [
+      "Amount to be billed in Rs. (Exl. of GST) (Masked)",
+      "Amount to be Billed (Excl. GST)",
+      "Amount to be Billed",
+      "numbers_tobe_billed",
+    ],
+    severity: "warning",
+  },
+  {
+    field: "clientCode",
+    candidates: ["Customer Name Code", "Client Code", "text_client", "Customer"],
+    severity: "warning",
+  },
+  {
+    field: "poDate",
+    candidates: ["Date of PO/LOI", "PO Date", "PO/LOI Date", "date_po"],
+    severity: "warning",
+  },
+];
+
+export function findMissingRequiredColumns(
+  requiredCols: RequiredColumnDef[],
+  columnMap: Record<string, string>,
+  sampleItems: RawMondayItem[]
+): { missing: RequiredColumnDef[]; present: string[] } {
+  if (sampleItems.length === 0) return { missing: [], present: [] };
+
+  const knownKeys = new Set<string>();
+  for (const k of Object.keys(columnMap)) {
+    knownKeys.add(k.trim().toLowerCase());
+  }
+
+  for (const item of sampleItems.slice(0, 10)) {
+    if (item.column_values) {
+      for (const cv of item.column_values) {
+        if (cv.id) knownKeys.add(cv.id.trim().toLowerCase());
+      }
+    }
+  }
+
+  const missing: RequiredColumnDef[] = [];
+  const present: string[] = [];
+
+  for (const def of requiredCols) {
+    const isMatched = def.candidates.some((c) => knownKeys.has(c.trim().toLowerCase()));
+    if (isMatched) {
+      present.push(def.field);
+    } else {
+      missing.push(def);
+    }
+  }
+
+  return { missing, present };
+}
+
 /**
  * Normalize Deals dataset with full data quality auditing
  */
@@ -235,6 +355,19 @@ export function normalizeDeals(
 
   const seenHashes = new Set<string>();
   let closeDateANonEmptyCount = 0;
+
+  // Schema Validation: Ensure required columns are present in schema
+  const missingColsResult = findMissingRequiredColumns(REQUIRED_DEALS_COLUMNS, columnMap, rawItems);
+  const missingRequiredColumns: string[] = [];
+  for (const miss of missingColsResult.missing) {
+    missingRequiredColumns.push(miss.field);
+    issues.push({
+      type: "missing_column_in_schema",
+      board: "deals",
+      description: `CRITICAL SCHEMA MISMATCH: Expected column for '${miss.field}' was not found in Deals board schema. Looked for: [${miss.candidates.join(", ")}]. Values default to 0 or null. Check board column titles.`,
+      details: { field: miss.field, candidates: miss.candidates, severity: miss.severity },
+    });
+  }
 
   for (const item of rawItems) {
     const colDict: Record<string, string | null> = {};
@@ -387,6 +520,7 @@ export function normalizeDeals(
       totalValidDeals: deals.length,
       junkRowsDropped,
       emptyColumnsExcluded: emptyCols,
+      missingRequiredColumns,
       maskedPlaceholderValuesCount: maskedValuesCount,
       maskedPlaceholderTotalSumExcluded: maskedSumExcluded,
       statusStageContradictionsCount: statusStageContradictions,
@@ -409,6 +543,23 @@ export function normalizeWorkOrders(
   let overBilledCount = 0;
   let dateAnomaliesCount = 0;
   let nearDuplicatesCount = 0;
+
+  // Schema Validation: Ensure required columns are present in schema
+  const missingColsResult = findMissingRequiredColumns(
+    REQUIRED_WORK_ORDERS_COLUMNS,
+    columnMap,
+    rawItems
+  );
+  const missingRequiredColumns: string[] = [];
+  for (const miss of missingColsResult.missing) {
+    missingRequiredColumns.push(miss.field);
+    issues.push({
+      type: "missing_column_in_schema",
+      board: "work_orders",
+      description: `CRITICAL SCHEMA MISMATCH: Expected column for '${miss.field}' was not found in Work Orders board schema. Looked for: [${miss.candidates.join(", ")}]. Values default to 0 or null. Check board column titles.`,
+      details: { field: miss.field, candidates: miss.candidates, severity: miss.severity },
+    });
+  }
 
   const seenHashes = new Set<string>();
 
@@ -601,6 +752,7 @@ export function normalizeWorkOrders(
       totalRawWorkOrdersRows: rawItems.length,
       totalValidWorkOrders: workOrders.length,
       junkRowsDropped,
+      missingRequiredColumns,
       overBilledRecordsCount: overBilledCount,
       dateAnomaliesCount,
       nearDuplicatesCount,

@@ -22,6 +22,10 @@ export function generateDataQualityReport(
     junkRowsDropped:
       (dealsResult.report.junkRowsDropped || 0) + (woResult.report.junkRowsDropped || 0),
     emptyColumnsExcluded: dealsResult.report.emptyColumnsExcluded || [],
+    missingRequiredColumns: [
+      ...(dealsResult.report.missingRequiredColumns || []),
+      ...(woResult.report.missingRequiredColumns || []),
+    ],
     maskedPlaceholderValuesCount: dealsResult.report.maskedPlaceholderValuesCount || 0,
     maskedPlaceholderTotalSumExcluded: dealsResult.report.maskedPlaceholderTotalSumExcluded || 0,
     overBilledRecordsCount: woResult.report.overBilledRecordsCount || 0,

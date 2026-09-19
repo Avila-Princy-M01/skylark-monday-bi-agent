@@ -70,6 +70,7 @@ export interface DataQualityIssue {
   type:
     | "junk_row_dropped"
     | "empty_column_excluded"
+    | "missing_column_in_schema"
     | "masked_placeholder_value"
     | "over_billed_negative"
     | "date_anomaly"
@@ -90,6 +91,7 @@ export interface DataQualityReport {
   totalValidWorkOrders: number;
   junkRowsDropped: number;
   emptyColumnsExcluded: string[];
+  missingRequiredColumns?: string[];
   maskedPlaceholderValuesCount: number;
   maskedPlaceholderTotalSumExcluded: number;
   overBilledRecordsCount: number;

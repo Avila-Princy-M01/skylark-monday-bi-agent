@@ -175,12 +175,12 @@ GitHub Actions (`.github/workflows/ci.yml`) gates every push and PR: secret scan
 
 ```bash
 npm run validate          # typecheck + lint + format:check + tests
-npm run test:coverage     # 104 tests, thresholds: 75% lines/functions/statements, 60% branches
+npm run test:coverage     # 111 tests, thresholds: 75% lines/functions/statements, 60% branches
 npm run build             # production build
 npm run smoke:test        # deployment smoke test (set SMOKE_TEST_URL)
 ```
 
-**Current state: 104 tests across 12 suites, all green. Coverage ≈ 85.7% lines / 75.2% branches.** Highlights:
+**Current state: 111 tests across 13 suites, all green.** Highlights:
 
 - `determinism.test.ts` — 1,000 repeated runs of the metric core produce **identical golden numbers (zero variance)**.
 - `normalizer.test.ts` — every repair rule reproduces a real defect found in the supplied data.
