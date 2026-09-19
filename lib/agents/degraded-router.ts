@@ -36,6 +36,14 @@ export function routeDegradedQuery(
     category = "stalled_pipeline";
     const res = getStalledDeals(deals, { asOfDate });
     factSheets.push(res.factSheet);
+  } else if (q.includes("concentration") || q.includes("top client") || q.includes("client risk")) {
+    category = "concentration";
+    const res = computeConcentrationRisk(deals, workOrders, { asOfDate });
+    factSheets.push(res.factSheet);
+  } else if (q.includes("stuck") || q.includes("conversion") || q.includes("trapped")) {
+    category = "stuck_money";
+    const res = computeStuckMoney(deals, workOrders, { asOfDate });
+    factSheets.push(res.factSheet);
   } else if (
     q.includes("pipeline") ||
     q.includes("deal") ||
@@ -71,14 +79,6 @@ export function routeDegradedQuery(
   ) {
     category = "operations";
     const res = computeOperationsMetrics(workOrders, { asOfDate });
-    factSheets.push(res.factSheet);
-  } else if (q.includes("concentration") || q.includes("top client") || q.includes("risk")) {
-    category = "concentration";
-    const res = computeConcentrationRisk(deals, workOrders, { asOfDate });
-    factSheets.push(res.factSheet);
-  } else if (q.includes("stuck") || q.includes("conversion")) {
-    category = "stuck_money";
-    const res = computeStuckMoney(deals, workOrders, { asOfDate });
     factSheets.push(res.factSheet);
   } else {
     category = "cross_board";
