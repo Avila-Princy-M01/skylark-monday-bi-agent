@@ -302,10 +302,19 @@ export default function HomePage() {
 
           <Link
             href="/brief"
-            className="px-3 py-1.5 text-xs border border-[#FF2A2A] bg-[#2A0808] hover:bg-[#3D0C0C] text-[#FF6B6B] transition flex items-center gap-1.5 font-bold uppercase tracking-wider"
+            id="exec-brief-button"
+            className="group relative inline-flex items-center gap-2 px-3.5 py-1.5 rounded-md bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-black font-extrabold text-xs tracking-wider uppercase shadow-[0_0_18px_rgba(245,158,11,0.45)] hover:shadow-[0_0_25px_rgba(245,158,11,0.7)] hover:scale-[1.03] active:scale-[0.98] transition-all duration-200 border border-amber-300 ring-2 ring-amber-500/20"
+            title="Open one-click Executive Leadership Brief"
           >
-            <FileText className="w-3.5 h-3.5" />
-            <span className="text-[10px]">EXEC BRIEF</span>
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-black opacity-60" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-black" />
+            </span>
+            <FileText className="w-3.5 h-3.5 text-black transition-transform group-hover:rotate-6 group-hover:scale-110" />
+            <span className="text-xs font-black tracking-wider text-black">EXEC BRIEF</span>
+            <span className="hidden sm:inline-block text-[9px] bg-black/15 text-black px-1.5 py-0.5 rounded font-mono font-black border border-black/10">
+              1-CLICK
+            </span>
           </Link>
         </div>
       </header>
@@ -355,6 +364,41 @@ export default function HomePage() {
                   arithmetic.
                 </p>
               </div>
+
+              {/* Executive Brief Quick-Launch Banner */}
+              <Link
+                href="/brief"
+                className="group relative block border border-amber-500/50 hover:border-amber-400 bg-gradient-to-r from-[#1F1805] via-[#141208] to-[#0D0D0D] p-4 transition-all duration-200 shadow-[0_0_25px_rgba(245,158,11,0.12)] hover:shadow-[0_0_35px_rgba(245,158,11,0.25)]"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3.5">
+                    <div className="p-2.5 bg-amber-400 text-black rounded font-black shadow-[0_0_15px_rgba(245,158,11,0.5)] group-hover:scale-105 transition-transform">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-black tracking-widest text-amber-400 uppercase">
+                          EXECUTIVE LEADERSHIP DOSSIER
+                        </span>
+                        <span className="text-[9px] px-1.5 py-0.5 bg-amber-400/20 text-amber-300 border border-amber-400/40 font-bold uppercase rounded">
+                          1-CLICK BOARD BRIEF
+                        </span>
+                        <span className="text-[9px] px-1.5 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold uppercase rounded">
+                          VERIFIED
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#AAA] mt-1 leading-snug">
+                        Instant comprehensive executive overview across Pipeline Health, Cash & AR
+                        Realization, Concentration Risks, and Operations SLAs.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs font-black text-amber-400 uppercase tracking-wider group-hover:text-amber-300 whitespace-nowrap self-end sm:self-center">
+                    <span>LAUNCH BRIEF</span>
+                    <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                  </div>
+                </div>
+              </Link>
 
               <div className="space-y-2">
                 <div className="text-[10px] text-[#777] uppercase tracking-widest font-bold flex items-center gap-2">

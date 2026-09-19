@@ -231,13 +231,28 @@ export async function runSupervisorLoop(
           ...reanalysis.factSheets.flatMap((fs) => fs.caveats || []),
         ];
       }
+
+      // Re-synthesize prose incorporating Critic feedback and newly pulled metrics
+      if (!budget.isTimeExceeded()) {
+        narration = await runNarratorWithLlm(
+          {
+            query: contextQuery,
+            factSheets: analystResult.factSheets,
+            assumptions: combinedAssumptions,
+            caveats: combinedCaveats,
+            criticFeedback: review.feedback,
+          },
+          { disableLlm: options.disableLlm }
+        );
+        pushTrace(narration.trace);
+      }
     }
 
-    // ---- 6. Final narration with whatever the Critic asked for -----------
-    if (!criticApproved && pendingFeedback) {
+    // ---- 6. Final safety check if loop terminated with ungrounded prose -----------
+    if (!criticApproved && pendingFeedback && !narration.isGrounded && !budget.isTimeExceeded()) {
       narration = await runNarratorWithLlm(
         {
-          query,
+          query: contextQuery,
           factSheets: analystResult.factSheets,
           assumptions: combinedAssumptions,
           caveats: combinedCaveats,
