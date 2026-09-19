@@ -20,90 +20,109 @@ export function DataHealthModal({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-1.5 px-2.5 py-1 text-xs border border-zinc-700/80 rounded bg-zinc-900/80 hover:bg-zinc-800 transition text-zinc-300 font-mono"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs border border-[#333] bg-[#141414] hover:bg-[#1C1C1C] hover:border-[#555] transition text-[#CCC] font-mono font-bold uppercase tracking-wider"
       >
-        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-        <span>Data Health:</span>
-        <span className="text-emerald-400 font-bold">100% Normalized</span>
+        <ShieldCheck className="w-3.5 h-3.5 text-[#4AF626]" />
+        <span className="text-[10px] text-[#888]">DATA_HEALTH:</span>
+        <span className="text-[10px] text-[#4AF626]">100% AUDITED</span>
         {isStale && (
-          <span className="px-1 py-0.2 bg-amber-500/20 text-amber-400 text-[10px] rounded">
-            Cached
+          <span className="px-1 py-0.2 bg-[#332200] text-[#FFB020] text-[8px] border border-[#664400]">
+            CACHED
           </span>
         )}
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm font-mono">
-          <div className="w-full max-w-lg border border-zinc-700 rounded-lg bg-[#12151b] shadow-2xl p-6 text-zinc-200 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-              <div className="flex items-center gap-2 font-bold text-sm text-white">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>Single Normalization Layer & Data Health</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm font-mono">
+          <div className="w-full max-w-xl border border-[#333] bg-[#0E0E0E] shadow-2xl p-6 text-[#D0D0D0] space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#222]">
+              <div className="flex items-center gap-2 font-black text-xs text-white uppercase tracking-wider">
+                <ShieldCheck className="w-4 h-4 text-[#4AF626]" />
+                <span>[ SINGLE_NORMALIZATION_LAYER & RESILIENCE_REPORT ]</span>
               </div>
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-1 text-zinc-400 hover:text-white transition"
+                className="p-1 text-[#666] hover:text-white transition"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-3 text-xs text-zinc-300 leading-relaxed">
-              <div className="p-3 bg-zinc-900/80 border border-zinc-800 rounded space-y-1">
-                <div className="text-zinc-400">Sync Status:</div>
-                <div className="text-emerald-400 font-semibold">
-                  Live Dynamic Schema Mapping & Cursor Pagination
+            <div className="space-y-3 text-xs leading-relaxed">
+              <div className="p-3 bg-[#141414] border border-[#262626] space-y-1">
+                <div className="text-[10px] text-[#666] uppercase tracking-widest font-bold">
+                  MONDAY.COM GRAPHQL V2 CONNECTOR
+                </div>
+                <div className="text-[#4AF626] font-bold text-xs uppercase">
+                  LIVE DYNAMIC COLUMN DISCOVERY & CURSOR PAGINATION
                 </div>
                 {lastSyncedAt && (
-                  <div className="text-zinc-500 text-[11px]">
-                    Last Synced: {new Date(lastSyncedAt).toLocaleString()}
+                  <div className="text-[#777] text-[10px]">
+                    TIMESTAMP: {new Date(lastSyncedAt).toISOString()}
                   </div>
                 )}
               </div>
 
               <div className="space-y-2">
-                <div className="font-semibold text-white">Active Resilience Guardrails:</div>
-                <ul className="list-disc list-inside space-y-1 text-zinc-400 text-[11px]">
-                  <li>
-                    <strong className="text-zinc-200">Junk Header Rows:</strong> Repeated header
-                    strings (e.g. Nezuko, Bugs Bunny) automatically detected and dropped.
-                  </li>
-                  <li>
-                    <strong className="text-zinc-200">Masked Values (~₹1):</strong> Excluded from
-                    financial aggregations and counted as undisclosed.
-                  </li>
-                  <li>
-                    <strong className="text-zinc-200">Over-Billed Negatives:</strong> Negative
-                    unbilled amounts isolated and reported separately.
-                  </li>
-                  <li>
-                    <strong className="text-zinc-200">Empty Columns:</strong> 100% empty columns
-                    (e.g. Close Date A) excluded from all business logic.
-                  </li>
-                  <li>
-                    <strong className="text-zinc-200">Cross-Board Non-Join:</strong> Company
-                    namespaces strictly kept distinct to prevent false joins.
-                  </li>
-                </ul>
+                <div className="font-bold text-white uppercase text-[10px] tracking-wider text-[#FF2A2A]">
+                  ACTIVE RESILIENCE GUARDRAILS
+                </div>
+                <div className="border border-[#1F1F1F] bg-[#0A0A0A] p-3 space-y-2 text-[11px] text-[#999]">
+                  <div className="flex items-start gap-2">
+                    <span className="text-[#FF2A2A] font-bold">&gt;&gt;</span>
+                    <div>
+                      <strong className="text-white">JUNK HEADER ROWS: </strong>
+                      Repeated header strings (e.g. &quot;Nezuko&quot;, &quot;Bugs Bunny&quot;)
+                      automatically purged.
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-[#FF2A2A] font-bold">&gt;&gt;</span>
+                    <div>
+                      <strong className="text-white">MASKED VALUES (~₹1): </strong>
+                      Isolated from revenue sums and categorized as confidential/undisclosed.
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-[#FF2A2A] font-bold">&gt;&gt;</span>
+                    <div>
+                      <strong className="text-white">OVER-BILLED NEGATIVES: </strong>
+                      Negative unbilled balances segregated and tagged for accounting review.
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-[#FF2A2A] font-bold">&gt;&gt;</span>
+                    <div>
+                      <strong className="text-white">100% EMPTY COLUMNS: </strong>
+                      Unused columns (e.g. Close Date A) pruned from calculations.
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-[#FF2A2A] font-bold">&gt;&gt;</span>
+                    <div>
+                      <strong className="text-white">CROSS-BOARD NAMESPACES: </strong>
+                      Client/Company codes kept isolated between Deals and Work Orders.
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {dataQualityIssuesCount > 0 && (
-                <div className="flex items-center gap-2 p-2.5 bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded text-[11px]">
+                <div className="flex items-center gap-2 p-2 bg-[#2E2000] border border-[#664400] text-[#FFB020] text-[10px] font-bold uppercase">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
                   <span>
-                    {dataQualityIssuesCount} normalization repairs & exclusions applied to live
-                    data.
+                    {dataQualityIssuesCount} NORMALIZATION CORRECTIONS APPLIED TO ACTIVE DATASET
                   </span>
                 </div>
               )}
             </div>
 
-            <div className="pt-2 flex justify-end">
+            <div className="pt-2 flex justify-end border-t border-[#1C1C1C]">
               <button
                 onClick={() => setIsOpen(false)}
-                className="px-4 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 text-white rounded font-medium transition"
+                className="px-4 py-1.5 text-xs bg-[#1C1C1C] hover:bg-[#2A2A2A] border border-[#333] text-white font-bold uppercase tracking-wider transition"
               >
-                Close
+                DISMISS
               </button>
             </div>
           </div>
