@@ -24,8 +24,20 @@ async function fetchUrl(urlStr: string): Promise<{ statusCode: number; body: str
   });
 }
 
+interface HealthPayload {
+  status?: string;
+  service?: string;
+  timestamp?: string;
+  environment?: {
+    configured?: Record<string, boolean>;
+    cacheTtlSeconds?: number;
+    dataSource?: string;
+  };
+}
+
 async function runSmokeTests() {
   console.log(`[SMOKE TEST] Verifying deployment target at: ${DEPLOYMENT_URL}`);
+  let failed = false;
 
   // 1. Verify Homepage / UI
   try {
@@ -34,35 +46,60 @@ async function runSmokeTests() {
       console.log(`[SMOKE TEST] ✅ GET / returned HTTP ${homeRes.statusCode}`);
     } else {
       console.error(`[SMOKE TEST] ❌ GET / failed with HTTP ${homeRes.statusCode}`);
-      process.exit(1);
+      failed = true;
     }
   } catch (err) {
     console.error(`[SMOKE TEST] ❌ Failed to reach GET /:`, err);
-    process.exit(1);
+    failed = true;
   }
 
-  // 2. Verify /api/health endpoint
+  // 2. Deep Health Verification (/api/health)
   try {
     const healthRes = await fetchUrl(`${DEPLOYMENT_URL}/api/health`);
-    if (healthRes.statusCode >= 200 && healthRes.statusCode < 400) {
-      console.log(`[SMOKE TEST] ✅ GET /api/health returned HTTP ${healthRes.statusCode}`);
-      try {
-        const json = JSON.parse(healthRes.body);
-        console.log(`[SMOKE TEST] Health Payload:`, JSON.stringify(json, null, 2));
-      } catch {
-        console.log(`[SMOKE TEST] Health body verified.`);
-      }
+    if (healthRes.statusCode !== 200) {
+      console.error(
+        `[SMOKE TEST] ❌ GET /api/health returned non-200 status: ${healthRes.statusCode}`
+      );
+      failed = true;
     } else {
-      // During initial bootstrap before API route is committed, warn rather than break pipeline
-      console.warn(
-        `[SMOKE TEST] ⚠️ GET /api/health returned HTTP ${healthRes.statusCode} (Endpoint will be active after API implementation)`
+      let payload: HealthPayload;
+      try {
+        payload = JSON.parse(healthRes.body) as HealthPayload;
+      } catch {
+        console.error(`[SMOKE TEST] ❌ /api/health response is not valid JSON`);
+        failed = true;
+        process.exit(1);
+      }
+
+      // Assert critical health contract fields
+      if (payload.status !== "healthy") {
+        console.error(
+          `[SMOKE TEST] ❌ /api/health status field is not 'healthy' (found: '${payload.status}')`
+        );
+        failed = true;
+      }
+
+      if (!payload.environment || typeof payload.environment.configured !== "object") {
+        console.error(`[SMOKE TEST] ❌ /api/health missing environment.configured object`);
+        failed = true;
+      }
+
+      console.log(
+        `[SMOKE TEST] ✅ GET /api/health passed content assertions:`,
+        JSON.stringify(payload, null, 2)
       );
     }
   } catch (err) {
-    console.warn(`[SMOKE TEST] ⚠️ Healthcheck endpoint not yet reachable:`, err);
+    console.error(`[SMOKE TEST] ❌ Failed to connect to /api/health:`, err);
+    failed = true;
   }
 
-  console.log(`[SMOKE TEST] 🎉 Post-deployment smoke test suite finished successfully!`);
+  if (failed) {
+    console.error(`[SMOKE TEST] 🚨 Smoke test failed! Marking deployment unhealthy.`);
+    process.exit(1);
+  }
+
+  console.log(`[SMOKE TEST] 🎉 Deployment verified and healthy!`);
 }
 
 runSmokeTests();

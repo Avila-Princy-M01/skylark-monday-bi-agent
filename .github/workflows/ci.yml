@@ -1,4 +1,4 @@
-name: Enterprise CI/CD Pipeline
+name: CI
 
 on:
   push:
@@ -15,7 +15,7 @@ env:
 
 jobs:
   # ============================================================================
-  # 1. SECRET SCANNING & SECURITY AUDIT (Hermetic)
+  # 1. SECRET SCANNING & SECURITY AUDIT (Strict Gitleaks)
   # ============================================================================
   security-audit-and-secret-scan:
     name: 🛡️ Secret Scan & Security Audit

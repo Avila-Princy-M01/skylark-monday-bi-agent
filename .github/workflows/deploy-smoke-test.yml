@@ -25,6 +25,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install Dependencies
+        run: npm install --prefer-offline --no-audit
+
       - name: Resolve Deployment URL
         id: resolve-url
         run: |
@@ -35,6 +38,6 @@ jobs:
           fi
 
       - name: Run Deployment Smoke Test Probe
-        run: npx tsx scripts/smoke-test.ts
+        run: npm run smoke:test
         env:
           DEPLOYMENT_URL: ${{ steps.resolve-url.outputs.target_url }}
