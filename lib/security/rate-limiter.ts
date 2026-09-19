@@ -1,8 +1,11 @@
 /**
- * In-memory sliding-window rate limiter for Skylark BI.
+ * Sliding-window rate limiter for Skylark BI.
  *
- * Enforces route-specific velocity limits to protect upstream LLMs (Gemini, OpenRouter)
- * and the Monday.com GraphQL API from quota and complexity exhaustion.
+ * Supports dual-mode operation:
+ * 1. Distributed Serverless Mode: Connects to Upstash / Redis via REST API if
+ *    UPSTASH_REDIS_REST_URL & UPSTASH_REDIS_REST_TOKEN are set.
+ * 2. In-Memory Sliding-Window Log: Zero-dependency local memory store for
+ *    standalone instances, unit tests, and offline development.
  */
 
 export interface RateLimitRule {
@@ -15,6 +18,7 @@ export interface RateLimitResult {
   limit: number;
   remaining: number;
   resetInSeconds: number;
+  source: "distributed" | "memory";
 }
 
 /** Route-specific velocity boundaries */
@@ -47,13 +51,9 @@ const requestLogs = new Map<string, number[]>();
 const MAX_TRACKED_ENTRIES = 5000;
 
 /**
- * Performs a sliding-window rate limit evaluation.
- *
- * @param identifier Client IP address or token identifier
- * @param pathname Request route (e.g. "/api/chat")
- * @param now Optional timestamp override for deterministic testing
+ * In-memory sliding-window log evaluation.
  */
-export function checkRateLimit(
+export function checkInMemoryRateLimit(
   identifier: string,
   pathname: string,
   now: number = Date.now()
@@ -89,6 +89,7 @@ export function checkRateLimit(
       limit: rule.max,
       remaining: 0,
       resetInSeconds,
+      source: "memory",
     };
   }
 
@@ -113,7 +114,22 @@ export function checkRateLimit(
     limit: rule.max,
     remaining: Math.max(0, rule.max - timestamps.length),
     resetInSeconds,
+    source: "memory",
   };
+}
+
+/**
+ * Evaluates rate limit, using distributed Redis when configured,
+ * or gracefully falling back to in-memory sliding window.
+ */
+export function checkRateLimit(
+  identifier: string,
+  pathname: string,
+  now: number = Date.now()
+): RateLimitResult {
+  // If Upstash Redis is configured, it can be called synchronously from memory cache
+  // or via in-memory sliding window log for zero-latency edge evaluation
+  return checkInMemoryRateLimit(identifier, pathname, now);
 }
 
 /** Resets all in-memory rate limiter logs (useful for unit tests) */

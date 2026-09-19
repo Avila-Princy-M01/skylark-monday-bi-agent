@@ -96,6 +96,22 @@ describe("Enterprise In-App Security & Rate Limiting", () => {
       });
       expect(isPayloadTooLarge(largeReq)).toBe(true);
     });
+
+    it("sanitizes client IP and rejects spoofed malformed headers", async () => {
+      const { getClientIp } = await import("@/lib/security/guard");
+
+      // Spoofed text injection should be rejected in favor of fallback
+      const spoofedReq = new NextRequest("http://localhost/api/chat", {
+        headers: { "x-forwarded-for": "malicious-script-tag, 10.0.0.1" },
+      });
+      expect(getClientIp(spoofedReq)).toBe("10.0.0.1");
+
+      // Cloudflare edge connecting IP is respected
+      const cfReq = new NextRequest("http://localhost/api/chat", {
+        headers: { "cf-connecting-ip": "203.0.113.195" },
+      });
+      expect(getClientIp(cfReq)).toBe("203.0.113.195");
+    });
   });
 
   describe("Administrative Authorization Guard", () => {

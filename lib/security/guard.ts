@@ -5,22 +5,50 @@
 import { NextRequest } from "next/server";
 
 export const MAX_BODY_SIZE_BYTES = 16 * 1024; // 16 KB
-export const MAX_QUERY_LENGTH = 500; // 500 characters
+export const MAX_QUERY_LENGTH = 1500; // Increased to 1,500 chars for multi-sentence executive inquiries
+
+// Standard IPv4 and IPv6 format validators
+const IPV4_REGEX = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
+const IPV6_REGEX = /^(?:[0-9a-fA-F]{1,4}:){1,7}[0-9a-fA-F]{1,4}$/;
+
+function isValidIp(ip: string): boolean {
+  return IPV4_REGEX.test(ip) || IPV6_REGEX.test(ip);
+}
 
 /**
- * Resolves client IP address from standard reverse-proxy headers.
+ * Resolves client IP address safely, preventing spoofing via unvalidated headers.
  */
 export function getClientIp(req: NextRequest): string {
+  // 1. Next.js / Vercel runtime connection IP (cannot be spoofed by client headers)
+  const runtimeIp = (req as unknown as { ip?: string }).ip;
+  if (runtimeIp && isValidIp(runtimeIp.trim())) {
+    return runtimeIp.trim();
+  }
+
+  // 2. Cloudflare Connecting IP (stripped and overwritten by Cloudflare edge)
+  const cfIp = req.headers.get("cf-connecting-ip");
+  if (cfIp && isValidIp(cfIp.trim())) {
+    return cfIp.trim();
+  }
+
+  // 3. Real IP header from reverse proxy
+  const realIp = req.headers.get("x-real-ip");
+  if (realIp && isValidIp(realIp.trim())) {
+    return realIp.trim();
+  }
+
+  // 4. Forwarded for header: sanitize and take the rightmost valid proxy hop
   const forwarded = req.headers.get("x-forwarded-for");
   if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) return first;
+    const hops = forwarded
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => isValidIp(s));
+    if (hops.length > 0) {
+      // Use the last hop (closest trusted reverse proxy client) or first
+      return hops[hops.length - 1];
+    }
   }
-  const realIp = req.headers.get("x-real-ip");
-  if (realIp) return realIp.trim();
-
-  const cfIp = req.headers.get("cf-connecting-ip");
-  if (cfIp) return cfIp.trim();
 
   return "127.0.0.1";
 }
