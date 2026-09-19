@@ -38,7 +38,6 @@ export async function GET(req: NextRequest) {
 
   const providersConfigured = config.llmChain.map((provider) => provider.providerName);
   const hasLlmKey = providersConfigured.length > 0;
-  const cached = getCachedData();
 
   let upstreamProbe: {
     requested: true;
@@ -50,9 +49,8 @@ export async function GET(req: NextRequest) {
 
   if (shouldProbe && mondayConfigured) {
     try {
-      const { createMondaySource } = await import("@/lib/monday/factory");
-      const source = createMondaySource();
-      await source.getBoardSchema(getMondayConfig().dealsBoardId);
+      const { loadBoardData } = await import("@/lib/data/loader");
+      await loadBoardData();
       upstreamProbe = { requested: true, mondayReachable: true, error: null };
     } catch (error) {
       upstreamProbe = {
@@ -62,6 +60,8 @@ export async function GET(req: NextRequest) {
       };
     }
   }
+
+  const cached = getCachedData();
 
   let status: HealthStatus = "healthy";
   const issues: string[] = [];

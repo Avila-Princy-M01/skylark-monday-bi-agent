@@ -17,7 +17,6 @@ import {
   Users,
   DollarSign,
   FileText,
-  Clock,
 } from "lucide-react";
 import { formatInr } from "@/lib/data/normalize";
 

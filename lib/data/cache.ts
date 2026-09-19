@@ -1,3 +1,6 @@
+import fs from "fs";
+import path from "path";
+import os from "os";
 import { Deal, WorkOrder, DataQualityReport } from "./types";
 
 export interface CachedDataState {
@@ -19,8 +22,41 @@ const DEFAULT_TTL_MS = 10 * 60 * 1000; // 10 minutes
 let globalCache: CacheEntry | null = null;
 let durableSnapshot: CachedDataState | null = null;
 
+function getSnapshotFilePath(): string {
+  try {
+    return path.join(os.tmpdir(), "skylark_monday_snapshot.json");
+  } catch {
+    return "skylark_monday_snapshot.json";
+  }
+}
+
+function trySaveSnapshotToDisk(state: CachedDataState): void {
+  try {
+    const filePath = getSnapshotFilePath();
+    fs.writeFileSync(filePath, JSON.stringify(state), "utf-8");
+  } catch {
+    // Non-blocking in restricted environments
+  }
+}
+
+function tryLoadSnapshotFromDisk(): CachedDataState | null {
+  try {
+    const filePath = getSnapshotFilePath();
+    if (fs.existsSync(filePath)) {
+      const content = fs.readFileSync(filePath, "utf-8");
+      return JSON.parse(content) as CachedDataState;
+    }
+  } catch {
+    // Non-blocking
+  }
+  return null;
+}
+
 export function getCachedData(): CachedDataState | null {
   if (!globalCache) {
+    if (!durableSnapshot) {
+      durableSnapshot = tryLoadSnapshotFromDisk();
+    }
     if (durableSnapshot) {
       return {
         ...durableSnapshot,
@@ -56,6 +92,7 @@ export function setCachedData(
 
   // Keep a durable snapshot to survive temporary network outages
   durableSnapshot = fullState;
+  trySaveSnapshotToDisk(fullState);
 
   return fullState;
 }
@@ -79,6 +116,12 @@ export function invalidateCache(): void {
 export function clearCacheSnapshot(): void {
   globalCache = null;
   durableSnapshot = null;
+  try {
+    const filePath = getSnapshotFilePath();
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch {}
 }
 
 /** The timestamp of the retained snapshot, if one exists. */
