@@ -15,10 +15,10 @@ env:
 
 jobs:
   # ============================================================================
-  # 1. SECRET SCANNING & SECURITY AUDIT (Strict Gitleaks)
+  # 1. SECRET SCANNING & SECURITY ADVISORY AUDIT
   # ============================================================================
   security-audit-and-secret-scan:
-    name: 🛡️ Secret Scan & Security Audit
+    name: 🛡️ Secret Scan & Security Audit (Advisory)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -27,19 +27,22 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Run Gitleaks Secret Scanner
+      - name: Run Gitleaks Secret Scanner (Blocking)
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_SUMMARY: true
 
-      - name: Setup Node.js
+      - name: Setup Node.js Environment with Cache
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: "npm"
 
-      - name: Run Security Audit
-        run: npm audit --audit-level=high || true
+      - name: Run Security Audit (Non-Blocking Advisory)
+        run: |
+          echo "Running npm audit check..."
+          npm audit --audit-level=high || echo "::warning title=Security Advisory::High severity dependencies detected in sub-dependencies. Review package upgrades."
 
   # ============================================================================
   # 2. CODE QUALITY, FORMATTING & LINTING (Parallel)
@@ -52,13 +55,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js Environment with Cache
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: "npm"
 
-      - name: Install Dependencies
-        run: npm install --prefer-offline --no-audit
+      - name: Install Dependencies with Frozen Lockfile
+        run: npm ci
 
       - name: Check Code Formatting (Prettier)
         run: npm run format:check
@@ -77,13 +81,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js Environment with Cache
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: "npm"
 
-      - name: Install Dependencies
-        run: npm install --prefer-offline --no-audit
+      - name: Install Dependencies with Frozen Lockfile
+        run: npm ci
 
       - name: TypeScript Compiler Check
         run: npm run typecheck
@@ -102,15 +107,16 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js Environment with Cache
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: "npm"
 
-      - name: Install Dependencies
-        run: npm install --prefer-offline --no-audit
+      - name: Install Dependencies with Frozen Lockfile
+        run: npm ci
 
-      - name: Run Determinism & Invariant Test Suite (Fixtures & Mocks Only)
+      - name: Run Determinism & Invariant Test Suite with Coverage
         run: npm run test:coverage
 
       - name: Report Vitest PR Coverage Summary
@@ -133,13 +139,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js Environment with Cache
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: "npm"
 
-      - name: Install Dependencies
-        run: npm install --prefer-offline --no-audit
+      - name: Install Dependencies with Frozen Lockfile
+        run: npm ci
 
       - name: Build Next.js Application (Validating Production Bundles)
         run: npm run build
