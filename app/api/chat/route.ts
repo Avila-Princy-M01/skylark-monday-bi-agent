@@ -45,6 +45,19 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  if (query.length > 500) {
+    return new Response(
+      JSON.stringify({
+        error: "Query exceeds maximum allowed length of 500 characters.",
+        code: "QUERY_TOO_LONG",
+      }),
+      {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }
+
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream<Uint8Array>({
