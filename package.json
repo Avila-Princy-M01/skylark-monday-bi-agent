@@ -19,7 +19,7 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "^0.0.12",
+    "@ai-sdk/openai-compatible": "^3.0.49",
     "ai": "^4.1.46",
     "clsx": "^2.1.1",
     "lucide-react": "^1.16.0",
