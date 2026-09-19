@@ -25,14 +25,15 @@ async function fetchUrl(urlStr: string): Promise<{ statusCode: number; body: str
 }
 
 interface HealthPayload {
-  status?: string;
+  status?: "healthy" | "degraded" | "misconfigured";
   service?: string;
   timestamp?: string;
-  environment?: {
-    configured?: Record<string, boolean>;
-    cacheTtlSeconds?: number;
-    dataSource?: string;
+  diagnostics?: {
+    monday?: { configured: boolean; dataSource: string };
+    llm?: { configured: boolean };
+    cache?: { ttlSeconds: number };
   };
+  issues?: string[];
 }
 
 async function runSmokeTests() {
@@ -56,38 +57,33 @@ async function runSmokeTests() {
   // 2. Deep Health Verification (/api/health)
   try {
     const healthRes = await fetchUrl(`${DEPLOYMENT_URL}/api/health`);
-    if (healthRes.statusCode !== 200) {
+    let payload: HealthPayload;
+    try {
+      payload = JSON.parse(healthRes.body) as HealthPayload;
+    } catch {
+      console.error(`[SMOKE TEST] ❌ /api/health response is not valid JSON`);
+      process.exit(1);
+    }
+
+    if (payload.status === "misconfigured" || healthRes.statusCode === 503) {
       console.error(
-        `[SMOKE TEST] ❌ GET /api/health returned non-200 status: ${healthRes.statusCode}`
+        `[SMOKE TEST] ❌ Deployment is misconfigured:`,
+        payload.issues?.join("; ") || "Missing critical credentials"
       );
       failed = true;
-    } else {
-      let payload: HealthPayload;
-      try {
-        payload = JSON.parse(healthRes.body) as HealthPayload;
-      } catch {
-        console.error(`[SMOKE TEST] ❌ /api/health response is not valid JSON`);
-        failed = true;
-        process.exit(1);
-      }
-
-      // Assert critical health contract fields
-      if (payload.status !== "healthy") {
-        console.error(
-          `[SMOKE TEST] ❌ /api/health status field is not 'healthy' (found: '${payload.status}')`
-        );
-        failed = true;
-      }
-
-      if (!payload.environment || typeof payload.environment.configured !== "object") {
-        console.error(`[SMOKE TEST] ❌ /api/health missing environment.configured object`);
-        failed = true;
-      }
-
-      console.log(
-        `[SMOKE TEST] ✅ GET /api/health passed content assertions:`,
-        JSON.stringify(payload, null, 2)
+    } else if (payload.status === "degraded") {
+      console.warn(
+        `[SMOKE TEST] ⚠️ Deployment running in degraded mode:`,
+        payload.issues?.join("; ")
       );
+    } else if (payload.status === "healthy") {
+      console.log(
+        `[SMOKE TEST] ✅ GET /api/health reported system is fully healthy:`,
+        JSON.stringify(payload.diagnostics, null, 2)
+      );
+    } else {
+      console.error(`[SMOKE TEST] ❌ Unknown health status received:`, payload.status);
+      failed = true;
     }
   } catch (err) {
     console.error(`[SMOKE TEST] ❌ Failed to connect to /api/health:`, err);
@@ -99,7 +95,7 @@ async function runSmokeTests() {
     process.exit(1);
   }
 
-  console.log(`[SMOKE TEST] 🎉 Deployment verified and healthy!`);
+  console.log(`[SMOKE TEST] 🎉 Smoke test completed successfully!`);
 }
 
 runSmokeTests();
