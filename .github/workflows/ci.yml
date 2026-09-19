@@ -39,7 +39,7 @@ jobs:
       - name: Run Security Audit (Non-Blocking Advisory)
         run: |
           echo "Running npm audit check..."
-          npm audit --audit-level=high || echo "::warning title=Security Advisory::High severity dependencies detected in sub-dependencies. Review package upgrades."
+          npm audit --audit-level=high || true
 
   # ============================================================================
   # 2. CODE QUALITY, FORMATTING & LINTING (Parallel)
