@@ -1,4 +1,4 @@
-name: Enterprise 10/10 Parallel CI/CD Quality Pipeline
+name: Enterprise CI/CD Pipeline
 
 on:
   push:
@@ -15,7 +15,7 @@ env:
 
 jobs:
   # ============================================================================
-  # 1. SECRET SCANNING & LEAK DETECTION (Gitleaks)
+  # 1. SECRET SCANNING & SECURITY AUDIT (Hermetic)
   # ============================================================================
   security-audit-and-secret-scan:
     name: 🛡️ Secret Scan & Security Audit
@@ -89,7 +89,7 @@ jobs:
         run: npm run typecheck
 
   # ============================================================================
-  # 4. DETERMINISTIC MATH, UNIT TESTS & PR COVERAGE BOT (Parallel)
+  # 4. HERMETIC DETERMINISTIC TESTS & PR COVERAGE BOT (Mocked, Zero Flake)
   # ============================================================================
   deterministic-test-suite:
     name: 🧮 Deterministic Math & Coverage Bot
@@ -110,7 +110,7 @@ jobs:
       - name: Install Dependencies
         run: npm install --prefer-offline --no-audit
 
-      - name: Run Determinism & Invariant Test Suite with Coverage
+      - name: Run Determinism & Invariant Test Suite (Fixtures & Mocks Only)
         run: npm run test:coverage
 
       - name: Report Vitest PR Coverage Summary
@@ -122,10 +122,10 @@ jobs:
         continue-on-error: true
 
   # ============================================================================
-  # 5. PRODUCTION BUILD & VERCEL PREVIEW GATE
+  # 5. PRODUCTION BUILD GATE
   # ============================================================================
   production-build-gate:
-    name: 🚀 Production Build & Vercel Preview Gate
+    name: 🚀 Production Build Gate
     needs: [lint-and-format, typecheck, deterministic-test-suite]
     runs-on: ubuntu-latest
     timeout-minutes: 8
@@ -148,11 +148,3 @@ jobs:
           MONDAY_API_TOKEN: "ci_token_test_stub"
           DEALS_BOARD_ID: "1111111111"
           WORK_ORDERS_BOARD_ID: "2222222222"
-
-      - name: Vercel Preview Deployment Verification
-        if: env.VERCEL_TOKEN != ''
-        run: npx vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }} && npx vercel build --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

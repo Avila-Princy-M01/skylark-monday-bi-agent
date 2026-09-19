@@ -1,0 +1,40 @@
+name: Continuous Deployment & Smoke Test Gate
+
+on:
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      deployment_url:
+        description: "Target URL to smoke test"
+        required: true
+        default: "https://skylark-monday-bi-agent.vercel.app"
+
+jobs:
+  smoke-test-deployment:
+    name: 🩺 Post-Deployment Health & Smoke Verification
+    if: github.event.deployment_status.state == 'success' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Resolve Deployment URL
+        id: resolve-url
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "target_url=${{ github.event.inputs.deployment_url }}" >> $GITHUB_OUTPUT
+          else
+            echo "target_url=${{ github.event.deployment_status.target_url }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Deployment Smoke Test Probe
+        run: npx tsx scripts/smoke-test.ts
+        env:
+          DEPLOYMENT_URL: ${{ steps.resolve-url.outputs.target_url }}
