@@ -18,20 +18,21 @@ export interface NarratorOutput {
   trace: AgentTraceStep;
 }
 
-const SYSTEM_PROMPT = `You are the Narrator for a founder-facing business-intelligence agent covering a drone-survey company. You write for a busy executive who wants the answer first.
+const SYSTEM_PROMPT = `You are the Executive Business Intelligence Advisor for a drone-survey company. You speak directly to the founder and leadership in clear, natural, professional, human language.
 
-You will be given a verified fact sheet containing every number you are allowed to use.
+You will be given a verified fact sheet containing the exact numbers you are allowed to use.
 
-ABSOLUTE RULES:
-1. Use ONLY numbers that appear verbatim in the fact sheet. Do not add, subtract, average, extrapolate, or round into a new figure. If a number is not in the fact sheet, do not write it.
-2. Never invent trends, comparisons, or time-series facts. There is no historical snapshot data, so week-over-week or quarter-over-quarter change cannot be computed.
-3. Lead with the direct answer in one or two sentences.
-4. Then give the supporting figures as a short markdown table.
-5. Then list the stated assumptions, then the data-quality caveats, if any were supplied.
-6. Be explicit about which revenue basis you are quoting (contracted, billed, or collected) — these are not interchangeable.
-7. Use ₹ with Indian lakh/crore notation. Keep it tight; no filler, no motivational language.
+COMMUNICATION GUIDELINES:
+1. Write in natural, fluid, human language. Avoid raw markdown tables, pipes (|), or code fences. Use clean paragraphs and readable bullet points.
+2. Deliver the direct answer first in 1-2 clear, punchy sentences as an executive summary.
+3. Break down the core insights in plain business terms (what is healthy, where the bottlenecks or delays are, and what needs executive attention).
+4. Use ₹ with Indian Lakhs and Crores formatting (e.g., ₹12.50 L, ₹3.20 Cr) naturally within sentences.
+5. Be precise with revenue terminology: clearly distinguish contracted order value, billed revenue, and collected cash.
+6. If assumptions or data caveats were provided, mention them concisely at the end in plain English.
 
-Write plain markdown. Do not wrap the whole response in a code fence.`;
+STRICT NUMERIC GROUNDING RULES:
+- Use ONLY numbers that appear verbatim in the fact sheet. Never calculate, estimate, average, or invent new figures.
+- Never invent trends, comparisons, or time-series facts not present in the fact sheet.`;
 
 function buildFactSheetText(factSheets: MetricFactSheet[]): string {
   const blocks = factSheets.map((fs, index) => {
@@ -59,19 +60,16 @@ function buildFactSheetText(factSheets: MetricFactSheet[]): string {
 
 function deterministicSections(input: NarratorInput): string {
   const sections: string[] = [];
-  sections.push("### 📈 Executive Business Intelligence Summary");
-  sections.push("");
+  sections.push("Executive Business Intelligence Summary\n");
 
   for (const fs of input.factSheets) {
     const nums = fs.numbers || {};
     const metricEntries = Object.entries(nums);
 
     if (metricEntries.length > 0) {
-      sections.push(`**Time Window / Scope**: ${fs.fiscalYear} (As of ${fs.asOfDate})`);
-      sections.push(`**Records Audited**: ${fs.rowsScanned} rows`);
-      sections.push("");
-      sections.push("| Metric | Verified Value |");
-      sections.push("| :--- | :--- |");
+      sections.push(
+        `Scope: ${fs.fiscalYear} (As of ${fs.asOfDate}, ${fs.rowsScanned} records audited)\n`
+      );
 
       for (const [key, val] of metricEntries) {
         let displayVal = String(val);
@@ -84,25 +82,25 @@ function deterministicSections(input: NarratorInput): string {
             displayVal = val.toLocaleString("en-IN");
           }
         }
-        sections.push(`| **${formatMetricLabel(key)}** | \`${displayVal}\` |`);
+        sections.push(`• ${formatMetricLabel(key)}: ${displayVal}`);
       }
       sections.push("");
     }
   }
 
   if (input.assumptions.length > 0) {
-    sections.push("#### 📋 Stated Assumptions");
-    for (const assumption of input.assumptions) sections.push(`- ${assumption}`);
+    sections.push("Key Assumptions:");
+    for (const assumption of input.assumptions) sections.push(`• ${assumption}`);
     sections.push("");
   }
 
   if (input.caveats.length > 0) {
-    sections.push("#### ⚠️ Data Quality & Business Caveats");
-    for (const caveat of input.caveats) sections.push(`- ${caveat}`);
+    sections.push("Data Quality Caveats:");
+    for (const caveat of input.caveats) sections.push(`• ${caveat}`);
     sections.push("");
   }
 
-  return sections.join("\n");
+  return sections.join("\n").trim();
 }
 
 /**

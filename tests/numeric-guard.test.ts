@@ -61,9 +61,9 @@ describe("Numeric Grounding Guard & Anti-Hallucination Bot", () => {
     expect(result.fallbackTemplateProse).toContain("Deterministic Fallback");
   });
 
-  it("renders deterministic fallback markdown table with verified figures when hallucination occurs", () => {
+  it("renders deterministic fallback with verified figures when hallucination occurs", () => {
     const rendered = renderDeterministicFallback([verifiedFactSheet]);
-    expect(rendered).toContain("### 📊 Verified BI Fact Sheet (Deterministic Fallback)");
+    expect(rendered).toContain("Executive Business Intelligence Summary (Deterministic Fallback)");
     expect(rendered).toContain("₹15.00 L");
     expect(rendered).toContain("73.1");
     expect(rendered).toContain("Masked values excluded");

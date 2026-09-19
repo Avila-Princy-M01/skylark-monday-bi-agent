@@ -137,30 +137,28 @@ export function validateNumericGrounding(
  * Fallback deterministic template renderer when grounding fails
  */
 export function renderDeterministicFallback(factSheets: MetricFactSheet[]): string {
-  const lines: string[] = ["### 📊 Verified BI Fact Sheet (Deterministic Fallback)", ""];
+  const lines: string[] = ["Executive Business Intelligence Summary (Deterministic Fallback)\n"];
 
   for (const fs of factSheets) {
-    lines.push(`**As of Date:** ${fs.asOfDate} | **Fiscal Year:** ${fs.fiscalYear}`);
-    lines.push(`**Rows Scanned:** ${fs.rowsScanned}`);
-    lines.push("");
-    lines.push("| Metric | Verified Value |");
-    lines.push("| :--- | :--- |");
+    lines.push(
+      `Scope: ${fs.fiscalYear} (As of ${fs.asOfDate}, ${fs.rowsScanned} records audited)\n`
+    );
     for (const [k, v] of Object.entries(fs.numbers)) {
       const formatted = typeof v === "number" && v > 1000 ? formatInr(v) : String(v);
-      lines.push(`| **${k}** | \`${formatted}\` |`);
+      lines.push(`• ${k}: ${formatted}`);
     }
     lines.push("");
     if (fs.assumptions.length > 0) {
-      lines.push("**Assumptions applied:**");
-      for (const a of fs.assumptions) lines.push(`- ${a}`);
+      lines.push("Assumptions applied:");
+      for (const a of fs.assumptions) lines.push(`• ${a}`);
       lines.push("");
     }
     if (fs.caveats.length > 0) {
-      lines.push("**Data caveats:**");
-      for (const c of fs.caveats) lines.push(`- ⚠️ ${c}`);
+      lines.push("Data caveats:");
+      for (const c of fs.caveats) lines.push(`• ${c}`);
       lines.push("");
     }
   }
 
-  return lines.join("\n");
+  return lines.join("\n").trim();
 }
