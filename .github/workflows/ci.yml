@@ -1,4 +1,4 @@
-name: Enterprise Parallel CI/CD Quality Pipeline
+name: Enterprise 10/10 Parallel CI/CD Quality Pipeline
 
 on:
   push:
@@ -56,9 +56,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: "npm"
 
-      - name: Install Dependencies
-        run: npm install --prefer-offline --no-audit
+      - name: Install Dependencies with Frozen Lockfile
+        run: npm ci
 
       - name: Check Code Formatting (Prettier)
         run: npm run format:check
@@ -81,20 +82,24 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: "npm"
 
-      - name: Install Dependencies
-        run: npm install --prefer-offline --no-audit
+      - name: Install Dependencies with Frozen Lockfile
+        run: npm ci
 
       - name: TypeScript Compiler Check
         run: npm run typecheck
 
   # ============================================================================
-  # 4. DETERMINISTIC MATH & UNIT TESTS (Parallel)
+  # 4. DETERMINISTIC MATH, UNIT TESTS & PR COVERAGE BOT (Parallel)
   # ============================================================================
   deterministic-test-suite:
-    name: 🧮 Deterministic Math & Golden Tests
+    name: 🧮 Deterministic Math & Coverage Bot
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -103,18 +108,27 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: "npm"
 
-      - name: Install Dependencies
-        run: npm install --prefer-offline --no-audit
+      - name: Install Dependencies with Frozen Lockfile
+        run: npm ci
 
-      - name: Run Determinism & Invariant Test Suite
-        run: npm run test
+      - name: Run Determinism & Invariant Test Suite with Coverage
+        run: npm run test:coverage
+
+      - name: Report Vitest PR Coverage Summary
+        if: github.event_name == 'pull_request'
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          json-summary-path: "./coverage/coverage-summary.json"
+          json-final-path: "./coverage/coverage-final.json"
+        continue-on-error: true
 
   # ============================================================================
-  # 5. PRODUCTION BUILD & BUNDLE VERIFICATION (Runs after quality gates)
+  # 5. PRODUCTION BUILD & VERCEL PREVIEW GATE
   # ============================================================================
   production-build-gate:
-    name: 🚀 Production Build Gate
+    name: 🚀 Production Build & Vercel Preview Gate
     needs: [lint-and-format, typecheck, deterministic-test-suite]
     runs-on: ubuntu-latest
     timeout-minutes: 8
@@ -126,14 +140,23 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: "npm"
 
-      - name: Install Dependencies
-        run: npm install --prefer-offline --no-audit
+      - name: Install Dependencies with Frozen Lockfile
+        run: npm ci
 
-      - name: Build Next.js Application
+      - name: Build Next.js Application (Validating Production Bundles)
         run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: 1
           MONDAY_API_TOKEN: "ci_token_test_stub"
           DEALS_BOARD_ID: "1111111111"
           WORK_ORDERS_BOARD_ID: "2222222222"
+
+      - name: Vercel Preview Deployment Verification
+        if: env.VERCEL_TOKEN != ''
+        run: npx vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }} && npx vercel build --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

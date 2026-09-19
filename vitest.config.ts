@@ -8,7 +8,7 @@ export default defineConfig({
     globals: true,
     coverage: {
       provider: "v8",
-      reporter: ["text", "json", "html"],
+      reporter: ["text", "json", "html", "json-summary"],
       include: ["lib/**/*.ts"],
       exclude: ["lib/**/*.d.ts"],
       thresholds: {
