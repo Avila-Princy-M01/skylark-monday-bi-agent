@@ -17,7 +17,7 @@
     "test:coverage": "vitest run --coverage",
     "smoke:test": "tsx scripts/smoke-test.ts",
     "validate": "npm run typecheck && npm run lint && npm run format:check && npm run test",
-    "prepare": "husky"
+    "prepare": "node -e \"if (!process.env.CI && process.env.NODE_ENV !== 'production') { import('husky').then(h => h.default && h.default()).catch(() => {}) }\""
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^0.0.12",
@@ -47,5 +47,9 @@
     "tsx": "^4.23.13",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
+  },
+  "optionalDependencies": {
+    "@emnapi/core": "1.11.3",
+    "@emnapi/runtime": "1.11.3"
   }
 }
