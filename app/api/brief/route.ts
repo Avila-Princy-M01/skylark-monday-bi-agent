@@ -190,13 +190,21 @@ _Brief generated deterministically by the Skylark BI metric engine. Every figure
       isStale: data.isStale,
       lastSyncedAt: data.lastSyncedAt,
       warnings: data.warnings,
+      dataset: {
+        dealsCount: data.deals.length,
+        workOrdersCount: data.workOrders.length,
+        correctionsApplied: data.report.issues.length,
+        provenance: dataSourceLine,
+      },
       grounding: {
         verified: grounding.isGrounded,
         unverifiedNumbers: grounding.unverifiedNumbers,
       },
       kpis: {
         totalOpenValue: pipeline.totalOpenValue,
+        openDealsCount: pipeline.openDealsCount,
         weightedPipelineValue: pipeline.weightedPipelineValue,
+        stalledValue: stalled.totalStalledValue,
         stalledDealsCount: stalled.stalledDealsCount,
         contractedOrderValueExclGst: revenue.contractedOrderValueExclGst,
         billedAmountExclGst: revenue.billedAmountExclGst,
@@ -205,6 +213,66 @@ _Brief generated deterministically by the Skylark BI metric engine. Every figure
         outstandingArInclGst: collections.totalOutstandingArInclGst,
         softwareAttachRatePct: operations.softwareAttachRatePct,
       },
+      topSectors: topSectors.map((s) => ({
+        sector: s.sector,
+        openPipelineValue: s.openPipelineValue,
+        contractedOrderValueExclGst: s.contractedOrderValueExclGst,
+        billedAmountExclGst: s.billedAmountExclGst,
+        collectionEfficiencyPct: s.collectionEfficiencyPct,
+      })),
+      topOwners: topOwners.map((o) => ({
+        ownerCode: o.ownerCode,
+        openPipelineValue: o.openPipelineValue,
+        contractedOrderValueExclGst: o.contractedOrderValueExclGst,
+        collectedAmountInclGst: o.collectedAmountInclGst,
+        collectionEfficiencyPct: o.collectionEfficiencyPct,
+      })),
+      arWatchlist: collections.arPriorityAccounts.slice(0, 5).map((a) => ({
+        clientCode: a.clientCode,
+        workOrderNumber: a.workOrderNumber,
+        outstandingArInclGst: a.outstandingArInclGst,
+        billingStatus: a.billingStatus,
+      })),
+      stuckMoney: {
+        wonDealsValueExclGst: stuck.wonDealsValueExclGst,
+        totalBilledValueExclGst: stuck.totalBilledValueExclGst,
+        uncollectedArValueInclGst: stuck.uncollectedArValueInclGst,
+      },
+      risks: [
+        {
+          title: "Stalled Pipeline",
+          detail: `${stalled.stalledDealsCount} open deals worth ${formatInr(stalled.totalStalledValue)} have tentative close dates before ${asOfDate}.`,
+        },
+        {
+          title: "Client Concentration",
+          detail: `Top 3 clients account for ${concentration.pipelineTop3ClientSharePct}% of open pipeline and ${concentration.orderBookTop3ClientSharePct}% of contracted order book.`,
+        },
+        {
+          title: "Execution at Risk",
+          detail: `${operations.notStartedWithPastPoCount} work orders remain 'Not Started' past their PO date.`,
+        },
+        {
+          title: "Delivery Anomalies",
+          detail: `${operations.deliveryBeforePoAnomaliesCount} work orders record delivery dates earlier than their PO date.`,
+        },
+        {
+          title: "Over-Billed Contracts",
+          detail: `${data.report.overBilledRecordsCount} work orders carry a negative amount-to-be-billed balance.`,
+        },
+      ],
+      disclosures: [
+        `Junk header rows dropped: ${data.report.junkRowsDropped} (repeated headers, dummy characters).`,
+        `Masked/placeholder values excluded: ${data.report.maskedPlaceholderValuesCount} deals around ₹1.`,
+        `100% empty columns excluded: ${data.report.emptyColumnsExcluded.join(", ") || "none"}.`,
+        `Status/stage contradictions reconciled: ${data.report.statusStageContradictionsCount}.`,
+        `Near-duplicate records flagged: ${data.report.nearDuplicatesCount}.`,
+        `Historical trend limitation: snapshot view; no historical backfills.`,
+      ],
+      recommendations: [
+        `Run a pipeline hygiene sprint with KAMs on the ${stalled.stalledDealsCount} stalled deals (${formatInr(stalled.totalStalledValue)}) to re-date or close them out.`,
+        `Prioritise collection follow-ups on the top 5 AR accounts (${formatInr(collections.totalOutstandingArInclGst)}) to raise collection efficiency above ${collections.overallCollectionEfficiencyPct}%.`,
+        `Triage the ${operations.notStartedWithPastPoCount} past-PO, not-started work orders with operations before SLA breach.`,
+      ],
     });
   } catch (error) {
     return NextResponse.json(
