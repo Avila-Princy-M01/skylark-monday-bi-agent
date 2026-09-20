@@ -271,4 +271,40 @@ describe("Multi-Agent Behavioral & Delegation Suite", () => {
     expect(resolvedResult.answer.length).toBeGreaterThan(0);
     expect(resolvedResult.factSheets.length).toBeGreaterThan(0);
   });
+
+  it("Supervisor short-circuits conversational greetings cleanly without invoking metric tools", async () => {
+    const greetingResult = await runSupervisorLoop("hi", {
+      deals: sampleDeals,
+      workOrders: sampleWorkOrders,
+      report: sampleReport,
+      asOfDate: "2026-03-31",
+    });
+
+    expect(greetingResult.answer).toContain("Executive Business Intelligence Advisor");
+    expect(greetingResult.answer).toContain("Stuck Money Analysis");
+    expect(greetingResult.factSheets.length).toBe(0);
+    expect(greetingResult.traces.some((t) => t.title.includes("conversational"))).toBe(true);
+    // Should NOT have run Data Steward or Analyst for a simple greeting
+    expect(greetingResult.traces.some((t) => t.role === "data_steward")).toBe(false);
+    expect(greetingResult.traces.some((t) => t.role === "analyst")).toBe(false);
+
+    const helpResult = await runSupervisorLoop("what can you do?", {
+      deals: sampleDeals,
+      workOrders: sampleWorkOrders,
+      report: sampleReport,
+      asOfDate: "2026-03-31",
+    });
+
+    expect(helpResult.answer).toContain("Conversion Chain & Stuck Money");
+    expect(helpResult.factSheets.length).toBe(0);
+
+    const thanksResult = await runSupervisorLoop("thank you", {
+      deals: sampleDeals,
+      workOrders: sampleWorkOrders,
+      report: sampleReport,
+      asOfDate: "2026-03-31",
+    });
+
+    expect(thanksResult.answer).toContain("You're welcome");
+  });
 });

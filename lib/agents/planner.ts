@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { completeJson, isLlmAvailable } from "../llm/client";
 import { METRIC_TOOL_NAMES, MetricToolName } from "../tools/registry";
-import { resolveSectorQuery } from "../query/aliases";
+import { resolveSectorQuery, KNOWN_CANONICAL_SECTORS } from "../query/aliases";
 import { resolveDateWindow, DateWindow } from "../query/fiscal";
 import { AgentTraceStep } from "./types";
 
@@ -156,7 +156,15 @@ function resolveSectorsFromQuery(query: string, llmSectors: string[]): string[] 
   if (alias.isSyntheticComposite || alias.matchedSectors.length === 1) {
     if (alias.matchedSectors.length > 0) return alias.matchedSectors;
   }
-  return llmSectors.length > 0 ? llmSectors : undefined;
+
+  // Only accept LLM-proposed sectors if they match canonical sectors in our data
+  const validLlmSectors = llmSectors
+    .map((s) =>
+      KNOWN_CANONICAL_SECTORS.find((canon) => canon.toLowerCase() === s.trim().toLowerCase())
+    )
+    .filter((s): s is string => Boolean(s));
+
+  return validLlmSectors.length > 0 ? validLlmSectors : undefined;
 }
 
 export interface PlanOptions {

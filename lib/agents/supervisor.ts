@@ -8,6 +8,11 @@ import { runCriticVerification } from "./critic";
 import { runNarratorWithLlm } from "./narrator";
 import { createAnalystPlan, planDeterministically } from "./planner";
 import { routeDegradedQuery } from "./degraded-router";
+import {
+  isConversationalQuery,
+  stripLeadingGreeting,
+  handleConversationalQuery,
+} from "./conversational";
 
 export interface ConversationTurn {
   role: "user" | "assistant";
@@ -18,21 +23,18 @@ export interface SupervisorOptions {
   deals: Deal[];
   workOrders: WorkOrder[];
   report: DataQualityReport;
-  lastSyncedAt?: string;
   asOfDate?: string;
-  maxWallClockSeconds?: number;
-  /** Loader warnings (stale snapshot, auth failure, …) surfaced as caveats. */
-  warnings?: string[];
-  /** Receives every trace step as it happens, enabling live streaming. */
-  onTrace?: (step: AgentTraceStep) => void;
-  /** Test seam: force every agent down its deterministic path. */
+  lastSyncedAt?: string | null;
+  /** Test seam: force deterministic clarification/narration. */
   disableLlm?: boolean;
-  /**
-   * Prior turns of this conversation, oldest first, excluding the current
-   * query. Lets follow-ups like "and for mining?" resolve against what was
-   * already asked and answered instead of being read as a brand-new question.
-   */
+  /** Streaming callback: fired each time an agent completes a trace step. */
+  onTrace?: (step: AgentTraceStep) => void;
+  /** Warnings from the data loader (stale snapshot, missing token, etc.). */
+  warnings?: string[];
+  /** Prior conversation turns, so follow-ups inherit context. */
   history?: ConversationTurn[];
+  /** Override the wall-clock budget for tests. */
+  maxWallClockSeconds?: number;
 }
 
 function makeTraceId(prefix: string): string {
@@ -70,6 +72,18 @@ export async function runSupervisorLoop(
     options.onTrace?.(step);
   };
 
+  // ---- Conversational Short-Circuit ------------------------------------
+  // Greetings ("hi", "hello"), capability questions ("what can you do"), and
+  // pleasantries ("thanks") do not require delegating to Data Steward, Clarifier,
+  // Planner, Analyst, Narrator, or Critic. Respond directly as a conversational AI advisor.
+  if (isConversationalQuery(query)) {
+    const conversationalResult = handleConversationalQuery(query);
+    conversationalResult.traces.forEach(pushTrace);
+    return conversationalResult;
+  }
+
+  const cleanedQuery = stripLeadingGreeting(query);
+
   const startTrace: AgentTraceStep = {
     id: makeTraceId("trace_sup_start"),
     role: "supervisor",
@@ -90,25 +104,25 @@ export async function runSupervisorLoop(
     .find((turn) => turn.role === "assistant")?.content;
   const hasAnaphora =
     /\b(and|also|what about|how about|for (that|the same)|same (sector|period|window)|again)\b/i.test(
-      query
-    ) || /^(and|also|what about|how about)\b/i.test(query.trim());
+      cleanedQuery
+    ) || /^(and|also|what about|how about)\b/i.test(cleanedQuery.trim());
 
   const isClarificationAnswer = Boolean(
     lastUserTurn &&
     (lastAssistantTurn?.includes("Clarification requested") ||
-      (query.length < 80 &&
-        !query.toLowerCase().startsWith("what") &&
-        !query.toLowerCase().startsWith("show") &&
-        !query.toLowerCase().startsWith("how") &&
-        !query.toLowerCase().startsWith("where") &&
-        !query.toLowerCase().startsWith("which") &&
-        !query.toLowerCase().startsWith("who")))
+      (cleanedQuery.length < 80 &&
+        !cleanedQuery.toLowerCase().startsWith("what") &&
+        !cleanedQuery.toLowerCase().startsWith("show") &&
+        !cleanedQuery.toLowerCase().startsWith("how") &&
+        !cleanedQuery.toLowerCase().startsWith("where") &&
+        !cleanedQuery.toLowerCase().startsWith("which") &&
+        !cleanedQuery.toLowerCase().startsWith("who")))
   );
 
   const contextQuery =
     (hasAnaphora || isClarificationAnswer) && lastUserTurn
-      ? `${lastUserTurn} (Operator specified: ${query})`
-      : query;
+      ? `${lastUserTurn} (Operator specified: ${cleanedQuery})`
+      : cleanedQuery;
 
   try {
     if (contextQuery !== query) {
@@ -129,7 +143,7 @@ export async function runSupervisorLoop(
       options.deals,
       options.workOrders,
       options.report,
-      options.lastSyncedAt
+      options.lastSyncedAt || undefined
     );
     pushTrace(stewardVerdict.trace);
 
