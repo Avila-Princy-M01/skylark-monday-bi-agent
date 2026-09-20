@@ -78,6 +78,7 @@ export async function runSupervisorLoop(
     content: `Received query: "${query}". Sequence: Data Steward → Clarifier → Planner → Analyst → Narrator → Critic.`,
     status: "running",
   };
+  pushTrace(startTrace);
   // ---- 0. Context resolution -------------------------------------------
   // Follow-ups like "and for mining?" or "what about last quarter?" only
   // make sense against the prior turns. Prepend prior turn context to the

@@ -190,10 +190,9 @@ export async function checkRateLimitAsync(
       }
     }
   } else if (process.env.NODE_ENV === "production") {
-    throw new Error(
-      "CRITICAL: Upstash Redis is not configured (missing UPSTASH_REDIS_REST_URL). " +
-        "In-memory rate limiting is disabled in production because serverless deployments (Vercel/AWS) " +
-        "will bypass in-memory tracking due to isolated container memory spaces."
+    console.warn(
+      "[RateLimiter] Upstash Redis environment variables (UPSTASH_REDIS_REST_URL) are missing in Vercel/Production environment. " +
+        "Falling back to in-memory rate limiting. Ensure Upstash credentials are set in Vercel Project Settings for distributed rate limiting."
     );
   }
 
