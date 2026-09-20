@@ -8,6 +8,8 @@ import {
 } from "@/lib/config";
 import { getCachedData } from "@/lib/data/cache";
 
+import { probeLlmReachability, LlmProviderReachability } from "@/lib/llm/client";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -20,9 +22,8 @@ export type HealthStatus = "healthy" | "degraded" | "misconfigured";
  * environment variables are present and which LLM providers are in the failover
  * chain, without spending monday.com API quota.
  *
- * Pass `?probe=1` to additionally perform a live connectivity test against
- * monday.com (one board-schema read per board). That distinguishes "configured"
- * from "actually working", which a pure env check cannot do.
+ * Pass `?probe=1` or `?probe_llm=1` to additionally perform live connectivity &
+ * model reachability probes against upstream services.
  */
 export async function GET(req: NextRequest) {
   const mondayConfigured = isMondayConfigured();
@@ -45,7 +46,10 @@ export async function GET(req: NextRequest) {
     error: string | null;
   } | null = null;
 
+  let llmReachability: LlmProviderReachability[] | null = null;
+
   const shouldProbe = req.nextUrl.searchParams.get("probe") === "1";
+  const shouldProbeLlm = shouldProbe || req.nextUrl.searchParams.get("probe_llm") === "1";
 
   if (shouldProbe && mondayConfigured) {
     try {
@@ -58,6 +62,14 @@ export async function GET(req: NextRequest) {
         mondayReachable: false,
         error: error instanceof Error ? error.message : String(error),
       };
+    }
+  }
+
+  if (shouldProbeLlm && hasLlmKey) {
+    try {
+      llmReachability = await probeLlmReachability(config.llmChain);
+    } catch (err) {
+      console.warn("LLM reachability probe error:", err);
     }
   }
 
@@ -109,6 +121,8 @@ export async function GET(req: NextRequest) {
           configured: hasLlmKey,
           providers: providersConfigured,
           order: ["gemini", "glm", "groq", "openrouter"],
+          reachability:
+            llmReachability ?? "Append ?probe_llm=1 to test provider model reachability",
         },
         cache: {
           ttlSeconds: getCacheTtlSeconds(),
