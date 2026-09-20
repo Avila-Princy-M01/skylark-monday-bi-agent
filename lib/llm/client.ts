@@ -247,3 +247,44 @@ export async function completeJson<T>(
 
   return null;
 }
+
+export interface LlmProviderReachability {
+  provider: string;
+  configured: boolean;
+  model: string;
+  reachable: boolean;
+  error?: string;
+}
+
+/**
+ * Diagnostic helper: probes LLM providers to verify model reachability independently of app logic.
+ */
+export async function probeLlmReachability(
+  chain: LlmProviderName[] = getConfig().llmChain,
+  fetchImpl: FetchLike = fetch
+): Promise<LlmProviderReachability[]> {
+  const results: LlmProviderReachability[] = [];
+  const testMessages: LlmMessage[] = [{ role: "user", content: "hi" }];
+
+  for (const provider of chain) {
+    try {
+      await callProvider(provider, testMessages, { maxTokens: 5, timeoutMs: 5000 }, fetchImpl);
+      results.push({
+        provider: provider.providerName,
+        configured: true,
+        model: provider.modelName,
+        reachable: true,
+      });
+    } catch (err) {
+      results.push({
+        provider: provider.providerName,
+        configured: true,
+        model: provider.modelName,
+        reachable: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return results;
+}

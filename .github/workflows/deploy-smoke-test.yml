@@ -7,7 +7,7 @@ on:
       deployment_url:
         description: "Target URL to smoke test"
         required: true
-        default: "https://skylark-monday-bi-agent.vercel.app"
+        default: "https://skylark-monday-bi-agent-blush.vercel.app"
 
 jobs:
   smoke-test-deployment:

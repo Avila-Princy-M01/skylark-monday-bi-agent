@@ -10,7 +10,13 @@ import { loadBoardData, forceResync } from "../lib/data/loader";
 import { getCachedData, clearCacheSnapshot } from "../lib/data/cache";
 import { MondayMcpSource, MCP_TOOLS } from "../lib/monday/mcp-source";
 import { MondayApiError } from "../lib/monday/errors";
-import { completeText, completeJson, extractJsonObject, isLlmAvailable } from "../lib/llm/client";
+import {
+  completeText,
+  completeJson,
+  extractJsonObject,
+  isLlmAvailable,
+  probeLlmReachability,
+} from "../lib/llm/client";
 import { planDeterministically, createAnalystPlan } from "../lib/agents/planner";
 import { runCriticVerification } from "../lib/agents/critic";
 import { runSupervisorLoop } from "../lib/agents/supervisor";
@@ -115,6 +121,25 @@ describe("Centralized configuration", () => {
     vi.stubEnv("LLM_FORCE_IN_TESTS", "");
     expect(getLlmProviderChain()).toEqual([]);
     expect(isLlmAvailable()).toBe(false);
+  });
+
+  it("probes provider model reachability independently of application logic", async () => {
+    const mockFetch = vi.fn(async () =>
+      jsonResponse({ choices: [{ message: { content: "ok" } }] })
+    );
+    const chain = [
+      {
+        providerName: "gemini" as const,
+        apiKey: "test-key",
+        modelName: "gemini-3.5-flash",
+        baseURL: "http://mock-llm.local",
+      },
+    ];
+
+    const results = await probeLlmReachability(chain, mockFetch as unknown as typeof fetch);
+    expect(results).toHaveLength(1);
+    expect(results[0].provider).toBe("gemini");
+    expect(results[0].reachable).toBe(true);
   });
 });
 
