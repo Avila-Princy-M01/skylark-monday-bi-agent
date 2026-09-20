@@ -36,11 +36,20 @@ export interface AppConfig {
   llmTimeoutMs: number;
 }
 
-/** Reads the first non-empty value among the provided env var names. */
+/** Reads the first non-empty value among the provided env var names, stripping quotes and redundant Bearer prefixes. */
 function firstEnv(...names: string[]): string {
   for (const name of names) {
     const value = process.env[name];
-    if (value && value.trim().length > 0) return value.trim();
+    if (value && value.trim().length > 0) {
+      let cleaned = value.trim();
+      // Strip surrounding single or double quotes
+      cleaned = cleaned.replace(/^["']|["']$/g, "").trim();
+      // If token accidentally includes 'Bearer ' prefix, strip it to prevent Authorization: Bearer Bearer ...
+      if (cleaned.toLowerCase().startsWith("bearer ")) {
+        cleaned = cleaned.slice(7).trim();
+      }
+      return cleaned;
+    }
   }
   return "";
 }
