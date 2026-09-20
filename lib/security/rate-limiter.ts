@@ -183,7 +183,18 @@ export async function checkRateLimitAsync(
       }
     } catch {
       // Fall through to in-memory on any Upstash network error or timeout
+      if (process.env.NODE_ENV === "production") {
+        console.error(
+          "Upstash Redis error during rate limit check in production. Failing open is risky, but falling back to memory is ineffective on serverless."
+        );
+      }
     }
+  } else if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "CRITICAL: Upstash Redis is not configured (missing UPSTASH_REDIS_REST_URL). " +
+        "In-memory rate limiting is disabled in production because serverless deployments (Vercel/AWS) " +
+        "will bypass in-memory tracking due to isolated container memory spaces."
+    );
   }
 
   return checkInMemoryRateLimit(identifier, pathname, now);
