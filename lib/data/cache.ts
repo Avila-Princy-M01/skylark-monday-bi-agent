@@ -91,7 +91,7 @@ export function setCachedData(
     expiresAt: Date.now() + ttlMs,
   };
 
-  // Keep a durable snapshot to survive temporary network outages
+  // Keep a best-effort instance-local snapshot (os.tmpdir) to survive temporary network outages within warm instances
   durableSnapshot = fullState;
   trySaveSnapshotToDisk(fullState);
 

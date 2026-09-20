@@ -19,7 +19,7 @@ A hosted multi-agent conversational system that answers founder-level business q
 3. **Single normalization layer** — `lib/data/normalize.ts` repairs the real-world mess in one auditable pass (details below) and emits a `DataQualityReport` itemizing every correction.
 4. **Genuine multi-agent system** — a Supervisor delegates to five specialists through real LLM planning with a deterministic fallback; a Critic can send work **back to the Analyst for recomputation** (bounded to 2 revision passes and a wall-clock budget).
 5. **Indian fiscal year** — April–March boundaries matching the `SDPL/FY25-26/...` invoice convention; the as-of date is anchored to the dataset (default `2026-03-31`) so time-based questions behave identically for every reviewer.
-6. **Graceful degradation ladder** — fresh cache → live read → last known-good snapshot with its age stated → explicit "unavailable" warning. It never looks like a successful empty result.
+6. **Graceful degradation ladder** — fresh cache → live read → best-effort instance-local snapshot with its age stated → explicit "unavailable" warning. It never looks like a successful empty result.
 
 ---
 
@@ -175,12 +175,12 @@ GitHub Actions (`.github/workflows/ci.yml`) gates every push and PR: secret scan
 
 ```bash
 npm run validate          # typecheck + lint + format:check + tests
-npm run test:coverage     # 111 tests, thresholds: 75% lines/functions/statements, 60% branches
+npm run test:coverage     # 133 tests, thresholds: 75% lines/functions/statements, 60% branches
 npm run build             # production build
 npm run smoke:test        # deployment smoke test (set SMOKE_TEST_URL)
 ```
 
-**Current state: 111 tests across 13 suites, all green.** Highlights:
+**Current state: 133 tests across 15 suites, all green.** Highlights:
 
 - `determinism.test.ts` — 1,000 repeated runs of the metric core produce **identical golden numbers (zero variance)**.
 - `normalizer.test.ts` — every repair rule reproduces a real defect found in the supplied data.
@@ -231,19 +231,19 @@ _Known slowness:_ the transport tests exercise the real exponential-backoff ladd
 ## ⚖️ Assumptions & trade-offs
 
 - **Determinism over flexibility**: every metric is a TypeScript tool; richer ad-hoc analysis would require expanding the toolbelt, not trusting a model's arithmetic.
-- **In-memory TTL cache**: a Vercel cold start loses the snapshot; a durable store is the first thing to add with more time (see DECISION_LOG §9).
+- **In-memory & instance-local snapshot cache**: `os.tmpdir()` serves as a best-effort instance-local snapshot; on serverless platforms (Vercel/AWS Lambda), cold starts or instance recycles reset this snapshot, requiring a live read or configured external store.
 - **No historical snapshots**: week-over-week trends cannot be computed and are deliberately not estimated — the Exec Brief states this.
 - **Masked ≈₹1 values are excluded from all sums** and reported as undisclosed rather than approximated.
 - **Session-scoped chat**: the client sends prior turns with each question so follow-ups and clarifier-chip answers resolve against the original intent; no persistent chat-log storage (not required by the brief, avoids privacy burden).
 
 ## 🧭 Known limitations
 
-- Durable snapshot storage is not implemented; degradation after a cold start is honest-but-empty rather than stale-but-useful.
+- Multi-region persistent snapshot storage is not wired by default; fallback snapshots are best-effort instance-local (`os.tmpdir()`) across warm lambda invocations.
 - The Critic's re-analysis is bounded to 2 passes; on non-convergence the answer is served with its caveats and `criticRejectedFinal` flagged.
 - Transport tests are slow (~15–20s each) because they exercise the real backoff ladder.
 
 ## 🗺️ Status — completed vs remaining
 
-**Completed:** live monday.com GraphQL + MCP transports with runtime schema discovery and cursor pagination; single normalization layer with a full data-quality report; 8 deterministic metric tools; multi-agent loop (Supervisor / Data Steward / Clarifier / Planner / Analyst / Narrator / Critic) with LLM planning and deterministic fallback; numeric grounding guard; SSE-streamed trace panel; staleness banners and data-health modal; Exec Brief with copy/download/print; 104 hermetic tests with coverage gates; CI/CD with secret scanning and a deployment smoke test; Vercel deployment; README and DECISION_LOG.
+**Completed:** live monday.com GraphQL + MCP transports with runtime schema discovery and cursor pagination; single normalization layer with a full data-quality report; 8 deterministic metric tools; multi-agent loop (Supervisor / Data Steward / Clarifier / Planner / Analyst / Narrator / Critic) with LLM planning and deterministic fallback; numeric grounding guard; SSE-streamed trace panel; staleness banners and data-health modal; Exec Brief with copy/download/print; 133 hermetic tests across 15 suites with coverage gates; CI/CD with secret scanning and a deployment smoke test; Vercel deployment; README and DECISION_LOG.
 
 **Remaining (with more time):** durable snapshot store; voice agent interface; richer Analyst tool-calling loop; scheduled live-board integration test; golden transcripts from the deployed URL.
