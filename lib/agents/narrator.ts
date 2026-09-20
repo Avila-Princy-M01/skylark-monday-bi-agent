@@ -18,17 +18,24 @@ export interface NarratorOutput {
   trace: AgentTraceStep;
 }
 
-const SYSTEM_PROMPT = `You are the Executive Business Intelligence Advisor for a drone-survey company. You speak directly to the founder and leadership in clear, natural, professional, human language.
+const SYSTEM_PROMPT = `You are the Executive Business Intelligence Advisor for Skylark Drones. You speak directly to the founder and leadership in clear, natural, professional, high-impact executive language.
 
 You will be given a verified fact sheet containing the exact numbers you are allowed to use.
 
-COMMUNICATION GUIDELINES:
-1. Write in natural, fluid, human language. Avoid raw markdown tables, pipes (|), or code fences. Use clean paragraphs and readable bullet points.
-2. Deliver the direct answer first in 1-2 clear, punchy sentences as an executive summary.
-3. Break down the core insights in plain business terms (what is healthy, where the bottlenecks or delays are, and what needs executive attention).
-4. Use ₹ with Indian Lakhs and Crores formatting (e.g., ₹12.50 L, ₹3.20 Cr) naturally within sentences.
-5. Be precise with revenue terminology: clearly distinguish contracted order value, billed revenue, and collected cash.
-6. If assumptions or data caveats were provided, mention them concisely at the end in plain English.
+COMMUNICATION & FORMATTING GUIDELINES:
+1. DELIVER THE DIRECT ANSWER FIRST: In the very first sentence, state the exact, direct answer to the user's specific question (e.g. name the client, state the metric). Never bury the lead.
+2. STAY STRICTLY FOCUSED ON THE QUESTION: Answer what was asked. If the user asks about a specific client or risk (e.g. "who is my worst client by AR"), provide that answer and only the 2-3 most directly relevant supporting numbers. DO NOT dump unrelated pipeline, revenue, or operations dossiers unless explicitly asked.
+3. CURRENCY SYMBOL RULES (CRITICAL):
+   - ONLY prefix monetary financial amounts with ₹ (e.g. ₹12.50 L, ₹3.20 Cr, ₹4.50 L).
+   - NEVER put currency symbols (₹) in front of counts, quantities, deals, work orders, accounts, or percentages!
+   - CORRECT: "64 won deals", "177 work orders", "88 accounts", "71.4% efficiency".
+   - INCORRECT (FORBIDDEN): "₹64 won deals", "₹177 work orders", "₹88 accounts".
+4. EXECUTIVE STRUCTURE:
+   - Use clean, prominent bold subheadings (e.g., **Key Executive Takeaway**, **Receivables & Exposure Risk**).
+   - Use concise, well-spaced bullet points (max 2-3 bullets per section).
+   - Never write dense, unreadable walls of text or giant run-on paragraphs.
+5. ASSUMPTIONS & CAVEATS:
+   - Keep Assumptions and Data Caveats concise and separated into 2-3 short bullet points at the very end under a distinct **Assumptions & Caveats** header. Never merge them into a continuous block of text.
 
 STRICT NUMERIC GROUNDING RULES:
 - Use ONLY numbers that appear verbatim in the fact sheet. Never calculate, estimate, average, or invent new figures.
@@ -195,12 +202,22 @@ export async function runNarratorWithLlm(
           buildFactSheetText(input.factSheets),
           "",
           input.assumptions.length > 0
-            ? `Stated assumptions to include:\n${input.assumptions.map((a) => `- ${a}`).join("\n")}`
-            : "No assumptions were stated.",
+            ? `Verified calculation assumptions (mention only the 1-2 most directly relevant as brief bullets):\n${Array.from(
+                new Set(input.assumptions)
+              )
+                .slice(0, 5)
+                .map((a) => `- ${a}`)
+                .join("\n")}`
+            : "",
           "",
           input.caveats.length > 0
-            ? `Data-quality caveats to include:\n${input.caveats.map((c) => `- ${c}`).join("\n")}`
-            : "No data-quality caveats apply.",
+            ? `Data caveats (mention only 1-2 most relevant as brief bullets if applicable):\n${Array.from(
+                new Set(input.caveats)
+              )
+                .slice(0, 4)
+                .map((c) => `- ${c}`)
+                .join("\n")}`
+            : "",
           "",
           input.criticFeedback
             ? `A previous draft was rejected by the verifier for this reason — fix it:\n${input.criticFeedback}`
@@ -208,7 +225,7 @@ export async function runNarratorWithLlm(
           "",
           `The user asked: ${input.query}`,
           "",
-          "Write the executive answer now, using only the fact sheet numbers above.",
+          "Write the executive answer now, focusing specifically on what was asked. Deliver the direct answer first, followed by concise supporting insights. Do NOT put ₹ on counts or quantities.",
         ]
           .filter(Boolean)
           .join("\n"),

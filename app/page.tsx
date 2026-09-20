@@ -16,6 +16,7 @@ import { AgentTraceStream } from "@/components/AgentTraceStream";
 import { DataHealthModal } from "@/components/DataHealthModal";
 import { SourceRowDrawer } from "@/components/SourceRowDrawer";
 import { VisualTelemetryCard } from "@/components/VisualTelemetryCard";
+import { MarkdownProse } from "@/components/MarkdownProse";
 import { AgentTraceStep, ClarifierVerdict } from "@/lib/agents/types";
 import { MetricFactSheet } from "@/lib/data/types";
 
@@ -486,7 +487,7 @@ export default function HomePage() {
                   )}
 
                   {msg.text ? (
-                    <div className="whitespace-pre-wrap leading-relaxed">{msg.text}</div>
+                    <MarkdownProse content={msg.text} />
                   ) : msg.streaming ? (
                     <div className="flex items-center gap-2 text-[#888] text-[11px] py-2">
                       <Activity className="w-3.5 h-3.5 animate-pulse text-[#FF2A2A]" />
