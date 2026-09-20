@@ -12,10 +12,18 @@ export interface GroundingValidationResult {
 /**
  * Extracts candidate numeric tokens from text, e.g. "₹1.50 Cr", "73.1%", "12,000", "489360", "₹444000"
  */
-export function extractNumbersFromProse(text: string): string[] {
+export function extractNumbersFromProse(text: string, entityNames: string[] = []): string[] {
+  // Strip known entity names first so alphanumeric or numbered client names are not flagged
+  let sanitized = text;
+  for (const name of entityNames) {
+    if (name && name.length >= 2) {
+      sanitized = sanitized.split(name).join(" ");
+    }
+  }
+
   // Strip out date fragments, calendar months, fiscal year markers, quarters, ordinals, and list bullets
   // to avoid false hallucination flags on calendar metadata.
-  const sanitized = text
+  sanitized = sanitized
     .replace(/\b\d{4}-\d{2}-\d{2}\b/g, " ")
     .replace(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g, " ")
     .replace(
@@ -35,6 +43,9 @@ export function extractNumbersFromProse(text: string): string[] {
     .replace(/(?:^|\n|\.\s+)\d+\.\s+/g, " ")
     .replace(/#\s*\d+\b/g, " ")
     .replace(/\bNo\.\s*\d+\b/gi, " ")
+    .replace(/\b(?:top|bottom|rank|ranked|priority|account|deal|item)\s*[-#]?\s*\d+\b/gi, " ")
+    .replace(/\b[A-Za-z]+[-_]\d+\b/g, " ")
+    .replace(/\b[A-Za-z]{2,}\d+\b/g, " ")
     .replace(/\b\d+\s*:\s*\d+\b/g, " ");
 
   const matches = sanitized.match(
@@ -82,7 +93,8 @@ export function validateNumericGrounding(
   prose: string,
   factSheets: MetricFactSheet[]
 ): GroundingValidationResult {
-  const tokens = extractNumbersFromProse(prose);
+  const entityNames = factSheets.flatMap((fs) => (fs.entities || []).map((e) => e.name));
+  const tokens = extractNumbersFromProse(prose, entityNames);
   const factSheetNumbers: number[] = [];
 
   // Allow standard statutory Indian GST rates present across all work orders
@@ -94,6 +106,29 @@ export function validateNumericGrounding(
     }
     if (Array.isArray(fs.sourceRowIds)) {
       factSheetNumbers.push(fs.sourceRowIds.length);
+    }
+    if (Array.isArray(fs.entities)) {
+      for (const e of fs.entities) {
+        if (typeof e.value === "number") {
+          factSheetNumbers.push(e.value, Math.abs(e.value));
+        }
+        if (typeof e.secondaryValue === "number") {
+          factSheetNumbers.push(e.secondaryValue, Math.abs(e.secondaryValue));
+        }
+        if (typeof e.sharePct === "number") {
+          factSheetNumbers.push(
+            e.sharePct,
+            Math.round(e.sharePct * 10) / 10,
+            Math.round(e.sharePct)
+          );
+        }
+        if (typeof e.count === "number") {
+          factSheetNumbers.push(e.count);
+        }
+        if (typeof e.rank === "number") {
+          factSheetNumbers.push(e.rank);
+        }
+      }
     }
     if (fs.numbers) {
       for (const [k, val] of Object.entries(fs.numbers)) {
@@ -275,6 +310,21 @@ export function renderDeterministicFallback(factSheets: MetricFactSheet[]): stri
     lines.push(
       `Scope: ${fs.fiscalYear} (As of ${fs.asOfDate}, ${fs.rowsScanned} records audited)\n`
     );
+
+    if (fs.entities && fs.entities.length > 0) {
+      lines.push("Top Entity Rankings & Breakdowns:");
+      for (const e of fs.entities.slice(0, 5)) {
+        const parts: string[] = [];
+        if (e.rank) parts.push(`#${e.rank}`);
+        parts.push(e.name);
+        if (typeof e.value === "number") parts.push(formatInr(e.value));
+        if (typeof e.sharePct === "number") parts.push(`(${e.sharePct}%)`);
+        if (typeof e.count === "number") parts.push(`[${e.count} records]`);
+        lines.push(`• ${e.category ? `${e.category}: ` : ""}${parts.join(" ")}`);
+      }
+      lines.push("");
+    }
+
     for (const [k, v] of Object.entries(fs.numbers)) {
       let formatted: string;
       if (typeof v === "number" && Math.abs(v) >= 1000) {

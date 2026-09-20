@@ -131,6 +131,13 @@ export function computeCollectionsMetrics(
         arAccountsCount: arAccounts.length,
         overBilledCount: overBilledAccounts.length,
       },
+      entities: arAccounts.slice(0, 10).map((acc, idx) => ({
+        name: acc.clientCode,
+        category: "AR Priority Account",
+        rank: idx + 1,
+        value: acc.outstandingArInclGst,
+        secondaryValue: acc.billedAmountInclGst,
+      })),
       sourceRowIds,
       rowsScanned: workOrders.length,
       assumptions: [

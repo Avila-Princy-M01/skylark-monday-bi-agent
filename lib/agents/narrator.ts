@@ -52,6 +52,19 @@ function buildFactSheetText(factSheets: MetricFactSheet[]): string {
         );
       }
     }
+
+    if (fs.entities && fs.entities.length > 0) {
+      lines.push("- verified entity breakdowns (top clients, priority accounts, owners):");
+      for (const e of fs.entities) {
+        const details: string[] = [];
+        if (e.rank) details.push(`Rank #${e.rank}`);
+        details.push(`Name: ${e.name}`);
+        if (typeof e.value === "number") details.push(`Value: ${e.value} (${formatInr(e.value)})`);
+        if (typeof e.sharePct === "number") details.push(`Share: ${e.sharePct}%`);
+        if (typeof e.count === "number") details.push(`Count: ${e.count}`);
+        lines.push(`  - ${e.category ? `[${e.category}] ` : ""}${details.join(", ")}`);
+      }
+    }
     return lines.join("\n");
   });
 
@@ -66,10 +79,24 @@ function deterministicSections(input: NarratorInput): string {
     const nums = fs.numbers || {};
     const metricEntries = Object.entries(nums);
 
-    if (metricEntries.length > 0) {
+    if (metricEntries.length > 0 || (fs.entities && fs.entities.length > 0)) {
       sections.push(
         `Scope: ${fs.fiscalYear} (As of ${fs.asOfDate}, ${fs.rowsScanned} records audited)\n`
       );
+
+      if (fs.entities && fs.entities.length > 0) {
+        sections.push("Top Entity Rankings & Breakdowns:");
+        for (const e of fs.entities.slice(0, 5)) {
+          const parts: string[] = [];
+          if (e.rank) parts.push(`#${e.rank}`);
+          parts.push(e.name);
+          if (typeof e.value === "number") parts.push(formatInr(e.value));
+          if (typeof e.sharePct === "number") parts.push(`(${e.sharePct}%)`);
+          if (typeof e.count === "number") parts.push(`[${e.count} records]`);
+          sections.push(`• ${e.category ? `${e.category}: ` : ""}${parts.join(" ")}`);
+        }
+        sections.push("");
+      }
 
       for (const [key, val] of metricEntries) {
         let displayVal = String(val);
