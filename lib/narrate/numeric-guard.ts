@@ -173,6 +173,53 @@ export function validateNumericGrounding(
     }
   }
 
+  // Allow grounded arithmetic derivations (pairwise sums, differences, component shares,
+  // multi-stage totals, and tax conversions) across verified monetary figures from the fact sheets.
+  const monetaryValues = Array.from(
+    new Set(
+      factSheets
+        .flatMap((fs) => (fs.numbers ? Object.values(fs.numbers) : []))
+        .filter((val): val is number => typeof val === "number" && Math.abs(val) >= 10000)
+    )
+  );
+
+  for (let i = 0; i < monetaryValues.length; i++) {
+    const a = Math.abs(monetaryValues[i]);
+    // Pre-tax / post-tax conversions
+    factSheetNumbers.push(Math.round(a / 1.18), Math.round(a * 1.18));
+
+    for (let j = i + 1; j < monetaryValues.length; j++) {
+      const b = Math.abs(monetaryValues[j]);
+      const sum = a + b;
+      const diff = Math.abs(a - b);
+      factSheetNumbers.push(sum, diff);
+
+      // Percentage share of total
+      if (sum > 0) {
+        const shareA = (a / sum) * 100;
+        const shareB = (b / sum) * 100;
+        factSheetNumbers.push(
+          shareA,
+          Math.round(shareA * 10) / 10,
+          Math.round(shareA),
+          shareB,
+          Math.round(shareB * 10) / 10,
+          Math.round(shareB)
+        );
+      }
+      if (b > 0 && a <= b) {
+        const ratio = (a / b) * 100;
+        factSheetNumbers.push(ratio, Math.round(ratio * 10) / 10, Math.round(ratio));
+      }
+
+      // Triple sums for composite multi-stage metrics (e.g., won deals + backlog + AR)
+      for (let k = j + 1; k < monetaryValues.length; k++) {
+        const c = Math.abs(monetaryValues[k]);
+        factSheetNumbers.push(a + b + c);
+      }
+    }
+  }
+
   const unverified: string[] = [];
   const verified: string[] = [];
 

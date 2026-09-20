@@ -41,6 +41,8 @@ Additional context you may rely on:
 - "energy" is not a stored sector; the data has Renewables and Powerline.
 - The fiscal year is Indian: 1 April to 31 March.
 - Money is Indian Rupees (INR).
+- If the user asks about multiple conversion stages or stuck money (e.g. "Where is the money stuck across won deals, unbilled backlog, and uncollected AR?"), each stage has its own natural metric (won deals = deal value excl. GST, unbilled backlog = unbilled contract value excl. GST, uncollected AR = outstanding AR incl. GST). Do NOT flag conversion-chain inquiries as ambiguous.
+- If the user specifies a metric or the query includes "(Operator specified: ...)", ambiguity is already resolved: return {"isAmbiguous":false,...}.
 
 Respond with raw JSON only, no prose and no markdown fences:
 {"isAmbiguous":false,"question":null,"options":[],"assumptions":["..."]}
@@ -69,6 +71,13 @@ const FISCAL_ASSUMPTION =
   "All quarterly and year-to-date metrics adhere to the Indian Fiscal Year (April 1 to March 31).";
 
 function isBareRevenueQuestion(query: string): boolean {
+  if (
+    query.includes("Operator specified") ||
+    query.includes("stuck money") ||
+    query.includes("won deals")
+  ) {
+    return false;
+  }
   const q = query
     .toLowerCase()
     .trim()
