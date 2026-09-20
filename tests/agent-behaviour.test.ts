@@ -222,5 +222,53 @@ describe("Multi-Agent Behavioral & Delegation Suite", () => {
     for (const trace of criticTraces) {
       expect(trace.content).not.toContain("Hallucination/Ungrounded numbers detected: 108312");
     }
+
+    const stuckFactSheet = result.factSheets.find(
+      (fs) => fs.numbers.unbilledBacklogValueExclGst !== undefined
+    );
+    expect(stuckFactSheet).toBeDefined();
+    expect(stuckFactSheet?.numbers.unbilledBacklogValueExclGst).toBe(200000);
+    expect(stuckFactSheet?.numbers.uncollectedArValueInclGst).toBe(444000);
+  });
+
+  it("Supervisor halts immediately on ambiguous queries without answering until operator selects an option", async () => {
+    const result = await runSupervisorLoop("what is our revenue?", {
+      deals: sampleDeals,
+      workOrders: sampleWorkOrders,
+      report: sampleReport,
+      asOfDate: "2026-03-31",
+      disableLlm: true,
+    });
+
+    // Answer must be empty so no premature or speculative answer is shown
+    expect(result.answer).toBe("");
+    expect(result.clarifyingVerdict?.isAmbiguous).toBe(true);
+    expect(result.clarifyingVerdict?.options?.length).toBe(3);
+    expect(result.factSheets.length).toBe(0);
+
+    const pauseTrace = result.traces.find((t) => t.title.includes("paused execution"));
+    expect(pauseTrace).toBeDefined();
+    expect(pauseTrace?.content).toContain("Execution paused until operator selects a resolution");
+
+    // Next turn: Operator clarifies by choosing an option
+    const resolvedResult = await runSupervisorLoop("Billed Revenue (Invoiced to date)", {
+      deals: sampleDeals,
+      workOrders: sampleWorkOrders,
+      report: sampleReport,
+      asOfDate: "2026-03-31",
+      disableLlm: true,
+      history: [
+        { role: "user", content: "what is our revenue?" },
+        {
+          role: "assistant",
+          content:
+            "[Clarification requested: How would you like revenue defined for this inquiry?]",
+        },
+      ],
+    });
+
+    expect(resolvedResult.clarifyingVerdict?.isAmbiguous).toBeFalsy();
+    expect(resolvedResult.answer.length).toBeGreaterThan(0);
+    expect(resolvedResult.factSheets.length).toBeGreaterThan(0);
   });
 });

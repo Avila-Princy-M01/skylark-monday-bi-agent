@@ -140,9 +140,21 @@ export default function HomePage() {
     // server resolve follow-ups like "and for mining?" or a clarifier-chip
     // answer against the question that prompted them.
     const history = messages
-      .filter((msg) => !msg.streaming && msg.text && !msg.text.startsWith("[SYSTEM FAULT]"))
+      .filter(
+        (msg) =>
+          !msg.streaming &&
+          (msg.text || msg.clarifyingVerdict?.isAmbiguous) &&
+          !msg.text?.startsWith("[SYSTEM FAULT]")
+      )
       .slice(-12)
-      .map((msg) => ({ role: msg.sender, content: msg.text }));
+      .map((msg) => ({
+        role: msg.sender,
+        content:
+          msg.text ||
+          (msg.clarifyingVerdict?.question
+            ? `[Clarification requested: ${msg.clarifyingVerdict.question}]`
+            : ""),
+      }));
 
     try {
       const res = await fetch("/api/chat", {
@@ -194,7 +206,9 @@ export default function HomePage() {
             };
             patchStreamingMessage((msg) => ({
               ...msg,
-              text: final.answer || "No telemetry returned.",
+              text: final.clarifyingVerdict?.isAmbiguous
+                ? ""
+                : final.answer || "No telemetry returned.",
               traces: final.traces?.length ? final.traces : msg.traces,
               assumptions: final.assumptions,
               caveats: final.caveats,

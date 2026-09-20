@@ -85,11 +85,30 @@ export async function runSupervisorLoop(
   // query for deterministic routing and fallback degraded path.
   const history = options.history ?? [];
   const lastUserTurn = [...history].reverse().find((turn) => turn.role === "user")?.content;
+  const lastAssistantTurn = [...history]
+    .reverse()
+    .find((turn) => turn.role === "assistant")?.content;
   const hasAnaphora =
     /\b(and|also|what about|how about|for (that|the same)|same (sector|period|window)|again)\b/i.test(
       query
     ) || /^(and|also|what about|how about)\b/i.test(query.trim());
-  const contextQuery = hasAnaphora && lastUserTurn ? `${lastUserTurn} — ${query}` : query;
+
+  const isClarificationAnswer = Boolean(
+    lastUserTurn &&
+    (lastAssistantTurn?.includes("Clarification requested") ||
+      (query.length < 80 &&
+        !query.toLowerCase().startsWith("what") &&
+        !query.toLowerCase().startsWith("show") &&
+        !query.toLowerCase().startsWith("how") &&
+        !query.toLowerCase().startsWith("where") &&
+        !query.toLowerCase().startsWith("which") &&
+        !query.toLowerCase().startsWith("who")))
+  );
+
+  const contextQuery =
+    (hasAnaphora || isClarificationAnswer) && lastUserTurn
+      ? `${lastUserTurn} (Operator specified: ${query})`
+      : query;
 
   try {
     if (contextQuery !== query) {
@@ -139,6 +158,37 @@ export async function runSupervisorLoop(
     const { plan, trace: plannerTrace } = plannerResult;
 
     pushTrace(clarifierTrace);
+
+    // CRITICAL: When ambiguity is detected, do NOT answer until the operator selects an option!
+    // Execution pauses immediately so no speculative or ungrounded answer is displayed.
+    if (clarifierVerdict.isAmbiguous) {
+      pushTrace({
+        id: makeTraceId("trace_sup_ambiguity_pause"),
+        role: "supervisor",
+        title: "Supervisor paused execution awaiting operator clarification",
+        timestamp: new Date().toISOString(),
+        content: `Ambiguity detected regarding "${clarifierVerdict.question || "query parameters"}". Execution paused until operator selects a resolution.`,
+        status: "completed",
+        metadata: {
+          question: clarifierVerdict.question,
+          optionsCount: clarifierVerdict.options?.length,
+        },
+      });
+
+      return {
+        answer: "",
+        traces: allTraces,
+        factSheets: [],
+        assumptions: clarifierVerdict.assumptions,
+        caveats: stewardVerdict.caveats,
+        sourceRowIds: [],
+        dataQualityIssuesCount: options.report.issues.length,
+        clarifyingVerdict: clarifierVerdict,
+        revisionPasses: 0,
+        criticRejectedFinal: false,
+      };
+    }
+
     pushTrace(plannerTrace);
 
     if (plan.primaryTool === speculativePlan.primaryTool) {
