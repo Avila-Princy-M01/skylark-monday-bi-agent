@@ -1,7 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { MondayGraphQLSource } from "../lib/monday/graphql-source";
 import { MondayApiError, withExponentialBackoff } from "../lib/monday/errors";
-import { getCachedData, setCachedData, invalidateCache } from "../lib/data/cache";
+import {
+  getCachedData,
+  setCachedData,
+  invalidateCache,
+  clearCacheSnapshot,
+} from "../lib/data/cache";
 
 describe("Monday.com Integration & Data Caching Suite", () => {
   it("builds dynamic column mappings by title from runtime board schema", () => {
@@ -56,7 +61,7 @@ describe("Monday.com Integration & Data Caching Suite", () => {
   });
 
   it("caches data with TTL and serves fallback snapshot on cache expiration", () => {
-    invalidateCache();
+    clearCacheSnapshot();
     expect(getCachedData()).toBeNull();
 
     const mockState = {
