@@ -91,6 +91,7 @@ export const CrossBoardInputSchema = z.object({
 export const ConcentrationInputSchema = z.object({
   topN: z.number().optional().default(5),
   asOfDate: z.string().optional(),
+  basis: z.enum(["contracted", "billed", "collected"]).optional(),
 });
 
 export const StuckMoneyInputSchema = z.object({
@@ -212,6 +213,7 @@ export function createDeterministicToolRegistry(ctx: ToolContext) {
         return computeConcentrationRisk(ctx.deals, ctx.workOrders, {
           topN: args.topN,
           asOfDate: args.asOfDate || ctx.asOfDate,
+          basis: args.basis,
         });
       },
     },

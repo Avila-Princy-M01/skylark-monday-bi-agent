@@ -114,7 +114,12 @@ export async function runAnalyst(
         };
       }
       case "get_concentration_risk": {
-        const res = await tools.get_concentration_risk.execute({ topN: 5, asOfDate: asOf });
+        const basis = /billed|invoice/i.test(query)
+          ? "billed"
+          : /collected|cash|receipt/i.test(query)
+            ? "collected"
+            : "contracted";
+        const res = await tools.get_concentration_risk.execute({ topN: 5, asOfDate: asOf, basis });
         return { factSheet: res.factSheet, isEmpty: res.topClientsPipeline.length === 0 };
       }
       case "get_stuck_money_analysis": {

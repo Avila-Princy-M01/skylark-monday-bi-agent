@@ -20,10 +20,15 @@ export interface ConcentrationRiskResult {
 export function computeConcentrationRisk(
   deals: Deal[],
   workOrders: WorkOrder[],
-  options: { topN?: number; asOfDate?: string } = {}
+  options: {
+    topN?: number;
+    asOfDate?: string;
+    basis?: "contracted" | "billed" | "collected";
+  } = {}
 ): ConcentrationRiskResult {
   const topN = options.topN || 5;
   const asOf = options.asOfDate || "2026-03-31";
+  const basis = options.basis || "contracted";
 
   // 1. Pipeline Client and Owner concentration (Open deals with valid values)
   const openDeals = deals.filter((d) => d.status === "Open" && d.dealValue !== null);
@@ -64,14 +69,21 @@ export function computeConcentrationRisk(
   const topOwnersPipeline = toSortedShares(ownerPipeMap, totalPipelineVal).slice(0, topN);
 
   // 2. Order Book (Work Orders) concentration
-  const totalOrderBookVal = workOrders.reduce((sum, w) => sum + w.orderValueExclGst, 0);
+  const getWoVal = (w: WorkOrder): number => {
+    if (basis === "billed") return w.billedAmountExclGst;
+    if (basis === "collected") return w.collectedAmountInclGst;
+    return w.orderValueExclGst;
+  };
+
+  const totalOrderBookVal = workOrders.reduce((sum, w) => sum + getWoVal(w), 0);
+  const totalContractedVal = workOrders.reduce((sum, w) => sum + w.orderValueExclGst, 0);
   const clientWoMap: Record<string, { val: number; count: number }> = {};
   const ownerWoMap: Record<string, { val: number; count: number }> = {};
 
   for (const w of workOrders) {
     const c = w.clientCode || "Unknown";
     const o = w.bdKamPersonnelCode || "Unknown";
-    const val = w.orderValueExclGst;
+    const val = getWoVal(w);
 
     if (!clientWoMap[c]) clientWoMap[c] = { val: 0, count: 0 };
     clientWoMap[c].val += val;
@@ -93,6 +105,61 @@ export function computeConcentrationRisk(
     .slice(0, 3)
     .reduce((sum, c) => sum + c.sharePercentage, 0);
 
+  const numbers: Record<string, number> = {
+    pipelineTop3ClientSharePct: Math.round(pipelineTop3ClientSharePct * 10) / 10,
+    orderBookTop3ClientSharePct: Math.round(orderBookTop3ClientSharePct * 10) / 10,
+    totalPipelineValue: Math.round(totalPipelineVal),
+    totalOrderBookValue: Math.round(totalOrderBookVal),
+    totalContractedValue: Math.round(totalContractedVal),
+  };
+
+  const basisLabel =
+    basis === "billed"
+      ? "Billed Revenue (Excl. GST)"
+      : basis === "collected"
+        ? "Cash Collected (Incl. GST)"
+        : "Contracted Order Value (Excl. GST)";
+
+  const assumptions: string[] = [
+    `Order book concentration computed over ${basisLabel}`,
+    "Pipeline concentration computed over open deals with non-masked deal values",
+  ];
+
+  const entities = [
+    ...topClientsOrderBook.map((c, idx) => ({
+      name: c.entity,
+      category: `Order Book Client (${basisLabel})`,
+      rank: idx + 1,
+      value: c.totalValue,
+      sharePct: c.sharePercentage,
+      count: c.count,
+    })),
+    ...topClientsPipeline.map((c, idx) => ({
+      name: c.entity,
+      category: "Pipeline Client",
+      rank: idx + 1,
+      value: c.totalValue,
+      sharePct: c.sharePercentage,
+      count: c.count,
+    })),
+    ...topOwnersOrderBook.map((o, idx) => ({
+      name: o.entity,
+      category: "Order Book Owner",
+      rank: idx + 1,
+      value: o.totalValue,
+      sharePct: o.sharePercentage,
+      count: o.count,
+    })),
+    ...topOwnersPipeline.map((o, idx) => ({
+      name: o.entity,
+      category: "Pipeline Owner",
+      rank: idx + 1,
+      value: o.totalValue,
+      sharePct: o.sharePercentage,
+      count: o.count,
+    })),
+  ];
+
   return {
     topClientsPipeline,
     topOwnersPipeline,
@@ -101,18 +168,11 @@ export function computeConcentrationRisk(
     pipelineTop3ClientSharePct: Math.round(pipelineTop3ClientSharePct * 10) / 10,
     orderBookTop3ClientSharePct: Math.round(orderBookTop3ClientSharePct * 10) / 10,
     factSheet: {
-      numbers: {
-        pipelineTop3ClientSharePct: Math.round(pipelineTop3ClientSharePct * 10) / 10,
-        orderBookTop3ClientSharePct: Math.round(orderBookTop3ClientSharePct * 10) / 10,
-        totalPipelineValue: Math.round(totalPipelineVal),
-        totalOrderBookValue: Math.round(totalOrderBookVal),
-      },
+      numbers,
+      entities,
       sourceRowIds: [...openDeals.map((d) => d.id), ...workOrders.map((w) => w.id)],
       rowsScanned: deals.length + workOrders.length,
-      assumptions: [
-        "Pipeline concentration computed over open deals with non-masked deal values",
-        "Order book concentration computed over Order Value (Excl. GST)",
-      ],
+      assumptions,
       caveats: [
         "Undisclosed/masked placeholder deals are excluded from pipeline concentration share denominators.",
       ],

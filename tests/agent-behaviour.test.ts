@@ -307,4 +307,24 @@ describe("Multi-Agent Behavioral & Delegation Suite", () => {
 
     expect(thanksResult.answer).toContain("You're welcome");
   });
+
+  it("Concentration and Collections tools populate dynamic entities and numeric guard grounds them", async () => {
+    const concentrationResult = await runSupervisorLoop(
+      "who is my top client by contracted order value",
+      {
+        deals: sampleDeals,
+        workOrders: sampleWorkOrders,
+        report: sampleReport,
+        asOfDate: "2026-03-31",
+      }
+    );
+
+    expect(concentrationResult.factSheets.length).toBeGreaterThan(0);
+    const fs = concentrationResult.factSheets[0];
+    expect(fs.entities).toBeDefined();
+    expect(fs.entities!.length).toBeGreaterThan(0);
+    expect(fs.entities![0].name).toBe("WOCOMPANY_001");
+    // Fallback or narration should clearly include the top client name
+    expect(concentrationResult.answer).toContain("WOCOMPANY_001");
+  });
 });

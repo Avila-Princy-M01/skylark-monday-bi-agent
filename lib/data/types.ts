@@ -103,8 +103,19 @@ export interface DataQualityReport {
   generatedAt: string;
 }
 
+export interface MetricEntityFact {
+  name: string;
+  category?: string;
+  rank?: number;
+  value?: number;
+  sharePct?: number;
+  secondaryValue?: number;
+  count?: number;
+}
+
 export interface MetricFactSheet {
   numbers: Record<string, number>;
+  entities?: MetricEntityFact[];
   sourceRowIds: string[];
   rowsScanned: number;
   assumptions: string[];
