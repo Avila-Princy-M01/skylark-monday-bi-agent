@@ -37,12 +37,31 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const query = (body.query || body.message || "").trim();
+  let query = (body.query || body.message || "").trim();
   if (!query) {
     return new Response(JSON.stringify({ error: "Query cannot be empty." }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  // Reject absurdly oversized queries (>4000 chars) to prevent prompt injection and memory bloat
+  if (query.length > 4000) {
+    return new Response(
+      JSON.stringify({
+        error: "Query exceeds maximum allowed length of 4,000 characters.",
+        code: "QUERY_TOO_LONG",
+      }),
+      {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }
+
+  // Gracefully truncate multi-paragraph prompts to 1,500 characters so executive queries succeed
+  if (query.length > 1500) {
+    query = query.slice(0, 1500);
   }
 
   const encoder = new TextEncoder();

@@ -43,6 +43,13 @@ export function runDataSteward(
     caveats.push(`Excluded 100% empty columns: ${report.emptyColumnsExcluded.join(", ")}.`);
   }
 
+  const driftIssues = report.issues.filter((i) => i.type === "schema_drift_warning");
+  if (driftIssues.length > 0) {
+    caveats.push(
+      `Detected ${driftIssues.length} schema drift warning(s) — columns resolved via secondary aliases.`
+    );
+  }
+
   const trace: AgentTraceStep = {
     id: `trace_steward_${Date.now()}`,
     role: "data_steward",

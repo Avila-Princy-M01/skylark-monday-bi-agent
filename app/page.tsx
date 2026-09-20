@@ -303,7 +303,7 @@ export default function HomePage() {
           <Link
             href="/brief"
             id="exec-brief-button"
-            className="group relative inline-flex items-center gap-2 px-3.5 py-1.5 rounded-md bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-black font-extrabold text-xs tracking-wider uppercase shadow-[0_0_18px_rgba(245,158,11,0.45)] hover:shadow-[0_0_25px_rgba(245,158,11,0.7)] hover:scale-[1.03] active:scale-[0.98] transition-all duration-200 border border-amber-300 ring-2 ring-amber-500/20"
+            className="group relative inline-flex items-center gap-2 px-3.5 py-1.5 rounded-md bg-gradient-to-r from-cyan-400 via-teal-400 to-emerald-400 hover:from-cyan-300 hover:to-emerald-300 text-slate-950 font-black text-xs tracking-wider uppercase shadow-[0_0_18px_rgba(6,182,212,0.45)] hover:shadow-[0_0_25px_rgba(6,182,212,0.7)] hover:scale-[1.03] active:scale-[0.98] transition-all duration-200 border border-cyan-300 ring-2 ring-cyan-500/20"
             title="Open one-click Executive Leadership Brief"
           >
             <span className="relative flex h-2 w-2">
@@ -368,19 +368,19 @@ export default function HomePage() {
               {/* Executive Brief Quick-Launch Banner */}
               <Link
                 href="/brief"
-                className="group relative block border border-amber-500/50 hover:border-amber-400 bg-gradient-to-r from-[#1F1805] via-[#141208] to-[#0D0D0D] p-4 transition-all duration-200 shadow-[0_0_25px_rgba(245,158,11,0.12)] hover:shadow-[0_0_35px_rgba(245,158,11,0.25)]"
+                className="group relative block border border-cyan-500/40 hover:border-cyan-400 bg-gradient-to-r from-[#06181F] via-[#091418] to-[#0D0D0D] p-4 transition-all duration-200 shadow-[0_0_25px_rgba(6,182,212,0.12)] hover:shadow-[0_0_35px_rgba(6,182,212,0.25)]"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-3.5">
-                    <div className="p-2.5 bg-amber-400 text-black rounded font-black shadow-[0_0_15px_rgba(245,158,11,0.5)] group-hover:scale-105 transition-transform">
+                    <div className="p-2.5 bg-cyan-400 text-black rounded font-black shadow-[0_0_15px_rgba(6,182,212,0.5)] group-hover:scale-105 transition-transform">
                       <FileText className="w-5 h-5" />
                     </div>
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-black tracking-widest text-amber-400 uppercase">
+                        <span className="text-xs font-black tracking-widest text-cyan-400 uppercase">
                           EXECUTIVE LEADERSHIP DOSSIER
                         </span>
-                        <span className="text-[9px] px-1.5 py-0.5 bg-amber-400/20 text-amber-300 border border-amber-400/40 font-bold uppercase rounded">
+                        <span className="text-[9px] px-1.5 py-0.5 bg-cyan-400/20 text-cyan-300 border border-cyan-400/40 font-bold uppercase rounded">
                           1-CLICK BOARD BRIEF
                         </span>
                         <span className="text-[9px] px-1.5 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold uppercase rounded">
@@ -393,7 +393,7 @@ export default function HomePage() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 text-xs font-black text-amber-400 uppercase tracking-wider group-hover:text-amber-300 whitespace-nowrap self-end sm:self-center">
+                  <div className="flex items-center gap-1 text-xs font-black text-cyan-400 uppercase tracking-wider group-hover:text-cyan-300 whitespace-nowrap self-end sm:self-center">
                     <span>LAUNCH BRIEF</span>
                     <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                   </div>

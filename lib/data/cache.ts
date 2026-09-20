@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { Deal, WorkOrder, DataQualityReport } from "./types";
+import { recordSnapshot, clearSnapshotLedger } from "./snapshot-ledger";
 
 export interface CachedDataState {
   deals: Deal[];
@@ -94,6 +95,9 @@ export function setCachedData(
   durableSnapshot = fullState;
   trySaveSnapshotToDisk(fullState);
 
+  // Record temporal snapshot in the rolling financial ledger
+  recordSnapshot(state.deals, state.workOrders);
+
   return fullState;
 }
 
@@ -116,6 +120,7 @@ export function invalidateCache(): void {
 export function clearCacheSnapshot(): void {
   globalCache = null;
   durableSnapshot = null;
+  clearSnapshotLedger();
   try {
     const filePath = getSnapshotFilePath();
     if (fs.existsSync(filePath)) {

@@ -7,6 +7,7 @@ import { computeOperationsMetrics } from "../metrics/operations";
 import { computeCrossBoardMetrics } from "../metrics/cross-board";
 import { computeConcentrationRisk } from "../metrics/concentration";
 import { computeStuckMoney } from "../metrics/stuck-money";
+import { computeTemporalTrends } from "../data/snapshot-ledger";
 import { resolveSectorQuery } from "../query/aliases";
 import { resolveIndianFiscalWindow } from "../query/fiscal";
 
@@ -32,6 +33,7 @@ export const METRIC_TOOL_NAMES = [
   "get_cross_board_scorecards",
   "get_concentration_risk",
   "get_stuck_money_analysis",
+  "get_temporal_trends",
 ] as const;
 
 export type MetricToolName = (typeof METRIC_TOOL_NAMES)[number];
@@ -93,6 +95,10 @@ export const ConcentrationInputSchema = z.object({
 
 export const StuckMoneyInputSchema = z.object({
   asOfDate: z.string().optional(),
+});
+
+export const TemporalTrendsInputSchema = z.object({
+  asOfDate: z.string().optional().describe("As-of date ISO YYYY-MM-DD"),
 });
 
 export const FiscalResolverInputSchema = z.object({
@@ -218,6 +224,50 @@ export function createDeterministicToolRegistry(ctx: ToolContext) {
         return computeStuckMoney(ctx.deals, ctx.workOrders, {
           asOfDate: args.asOfDate || ctx.asOfDate,
         });
+      },
+    },
+
+    get_temporal_trends: {
+      description:
+        "Analyzes historical velocity, pipeline shifts, AR trends and collection efficiency across snapshots",
+      parameters: TemporalTrendsInputSchema,
+      execute: async (args?: z.infer<typeof TemporalTrendsInputSchema>) => {
+        const asOf = args?.asOfDate || ctx.asOfDate || "2026-03-31";
+        const trends = computeTemporalTrends();
+
+        const numbers: Record<string, number> = {
+          snapshotCount: trends.snapshotCount,
+          timeSpanMinutes: trends.timeSpanMinutes,
+        };
+
+        for (const vel of trends.velocities) {
+          const key = vel.metric.replace(/[^a-zA-Z0-9]/g, "_");
+          numbers[`${key}_delta`] = vel.delta;
+          if (vel.pctChange !== null) {
+            numbers[`${key}_pctChange`] = vel.pctChange;
+          }
+        }
+
+        return {
+          trends,
+          factSheet: {
+            numbers,
+            sourceRowIds: [],
+            rowsScanned: trends.snapshotCount,
+            assumptions: [
+              `Calculated across ${trends.snapshotCount} historical snapshots in the temporal ledger.`,
+              trends.summary,
+            ],
+            caveats:
+              trends.snapshotCount <= 1
+                ? [
+                    "Baseline snapshot established; comparative velocity requires subsequent resyncs.",
+                  ]
+                : [],
+            asOfDate: asOf,
+            fiscalYear: "FY25-26",
+          },
+        };
       },
     },
   };
