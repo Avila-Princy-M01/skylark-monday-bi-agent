@@ -15,7 +15,9 @@ import {
 import { AgentTraceStream } from "@/components/AgentTraceStream";
 import { DataHealthModal } from "@/components/DataHealthModal";
 import { SourceRowDrawer } from "@/components/SourceRowDrawer";
+import { VisualTelemetryCard } from "@/components/VisualTelemetryCard";
 import { AgentTraceStep, ClarifierVerdict } from "@/lib/agents/types";
+import { MetricFactSheet } from "@/lib/data/types";
 
 interface ChatMessage {
   id: string;
@@ -29,6 +31,7 @@ interface ChatMessage {
   isDegradedFallback?: boolean;
   revisionPasses?: number;
   streaming?: boolean;
+  factSheets?: MetricFactSheet[];
 }
 
 interface DataSourceInfo {
@@ -197,6 +200,7 @@ export default function HomePage() {
             const final = parsed.data as {
               answer: string;
               traces: AgentTraceStep[];
+              factSheets?: MetricFactSheet[];
               assumptions: string[];
               caveats: string[];
               sourceRowIds: string[];
@@ -210,6 +214,7 @@ export default function HomePage() {
                 ? ""
                 : final.answer || "No telemetry returned.",
               traces: final.traces?.length ? final.traces : msg.traces,
+              factSheets: final.factSheets,
               assumptions: final.assumptions,
               caveats: final.caveats,
               sourceRowIds: final.sourceRowIds,
@@ -488,6 +493,10 @@ export default function HomePage() {
                       <span className="uppercase tracking-widest">Agents working…</span>
                     </div>
                   ) : null}
+
+                  {msg.factSheets && msg.factSheets.length > 0 && (
+                    <VisualTelemetryCard factSheets={msg.factSheets} />
+                  )}
 
                   {msg.streaming && msg.traces && msg.traces.length === 0 && (
                     <div className="mt-2 text-[10px] text-[#666] uppercase tracking-widest">
