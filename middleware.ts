@@ -46,38 +46,41 @@ export async function middleware(req: NextRequest) {
   }
 
   // 3. Client identification & sliding-window rate evaluation (distributed or in-memory)
-  const clientIp = getClientIp(req);
-  const rateLimit = await checkRateLimitAsync(clientIp, pathname);
-
-  // 4. Reject if rate limit exceeded
-  if (!rateLimit.allowed) {
-    return NextResponse.json(
-      {
-        error: "Too many requests. Please throttle your requests.",
-        code: "RATE_LIMIT_EXCEEDED",
-        retryAfterSeconds: rateLimit.resetInSeconds,
-      },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(rateLimit.resetInSeconds),
-          "X-RateLimit-Limit": String(rateLimit.limit),
-          "X-RateLimit-Remaining": "0",
-          "X-RateLimit-Reset": String(rateLimit.resetInSeconds),
-          "X-RateLimit-Source": rateLimit.source,
-          "X-Content-Type-Options": "nosniff",
-          "X-Frame-Options": "DENY",
-        },
-      }
-    );
-  }
-
-  // 5. Continue with rate-limit and defensive security headers attached
   const response = NextResponse.next();
-  response.headers.set("X-RateLimit-Limit", String(rateLimit.limit));
-  response.headers.set("X-RateLimit-Remaining", String(rateLimit.remaining));
-  response.headers.set("X-RateLimit-Reset", String(rateLimit.resetInSeconds));
-  response.headers.set("X-RateLimit-Source", rateLimit.source);
+  try {
+    const clientIp = getClientIp(req);
+    const rateLimit = await checkRateLimitAsync(clientIp, pathname);
+
+    // 4. Reject if rate limit exceeded
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: "Too many requests. Please throttle your requests.",
+          code: "RATE_LIMIT_EXCEEDED",
+          retryAfterSeconds: rateLimit.resetInSeconds,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(rateLimit.resetInSeconds),
+            "X-RateLimit-Limit": String(rateLimit.limit),
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": String(rateLimit.resetInSeconds),
+            "X-RateLimit-Source": rateLimit.source,
+            "X-Content-Type-Options": "nosniff",
+            "X-Frame-Options": "DENY",
+          },
+        }
+      );
+    }
+
+    response.headers.set("X-RateLimit-Limit", String(rateLimit.limit));
+    response.headers.set("X-RateLimit-Remaining", String(rateLimit.remaining));
+    response.headers.set("X-RateLimit-Reset", String(rateLimit.resetInSeconds));
+    response.headers.set("X-RateLimit-Source", rateLimit.source);
+  } catch (err) {
+    console.warn("[Middleware] Rate limiting check failed, failing open safely:", err);
+  }
 
   // Defense-in-depth security headers
   response.headers.set("X-Content-Type-Options", "nosniff");
