@@ -228,7 +228,48 @@ export async function runNarratorWithLlm(
     };
   }
 
-  const grounding = validateNumericGrounding(generated.text, input.factSheets);
+  let finalProse = generated.text;
+  let grounding = validateNumericGrounding(finalProse, input.factSheets);
+
+  // Self-correction pass: If the initial draft contains minor ungrounded figures (e.g. 1-4 tokens),
+  // immediately give the model one targeted chance to self-correct rather than prematurely falling back.
+  if (!grounding.isGrounded && grounding.unverifiedNumbers.length <= 4) {
+    const retry = await completeText(
+      [
+        { role: "system", content: SYSTEM_PROMPT },
+        {
+          role: "user",
+          content: [
+            buildFactSheetText(input.factSheets),
+            "",
+            input.assumptions.length > 0
+              ? `Stated assumptions:\n${input.assumptions.map((a) => `- ${a}`).join("\n")}`
+              : "",
+            input.caveats.length > 0
+              ? `Data caveats:\n${input.caveats.map((c) => `- ${c}`).join("\n")}`
+              : "",
+            `The user asked: ${input.query}`,
+            "",
+            `CORRECTION REQUIRED: Your previous draft was rejected because it contained these unverified numbers: [${grounding.unverifiedNumbers.join(
+              ", "
+            )}].`,
+            "Rewrite your response now using ONLY verified figures from the fact sheet. Do not include or invent any numbers outside the fact sheet.",
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        },
+      ],
+      { temperature: 0.1, maxTokens: 1400 }
+    );
+
+    if (retry) {
+      const retryGrounding = validateNumericGrounding(retry.text, input.factSheets);
+      if (retryGrounding.isGrounded) {
+        finalProse = retry.text;
+        grounding = retryGrounding;
+      }
+    }
+  }
 
   const trace: AgentTraceStep = {
     id: `trace_narrator_llm_${Date.now()}`,
@@ -237,7 +278,7 @@ export async function runNarratorWithLlm(
     timestamp: new Date().toISOString(),
     content: grounding.isGrounded
       ? `Generated founder-grade prose with ${grounding.verifiedNumbers.length} verified figures and zero ungrounded numbers.`
-      : `Grounding guard rejected ${grounding.unverifiedNumbers.length} ungrounded figure(s); served the deterministic fallback instead.`,
+      : `Grounding guard rejected ${grounding.unverifiedNumbers.length} ungrounded figure(s) [${grounding.unverifiedNumbers.join(", ")}]; served the deterministic fallback instead.`,
     status: grounding.isGrounded ? "completed" : "warn",
     metadata: {
       mode: grounding.isGrounded ? "llm" : "llm_rejected",
@@ -251,7 +292,7 @@ export async function runNarratorWithLlm(
   };
 
   return {
-    prose: grounding.isGrounded ? generated.text : renderDeterministicFallback(input.factSheets),
+    prose: grounding.isGrounded ? finalProse : renderDeterministicFallback(input.factSheets),
     isGrounded: grounding.isGrounded,
     trace,
   };

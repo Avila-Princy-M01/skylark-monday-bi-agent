@@ -43,13 +43,13 @@ export function extractNumbersFromProse(text: string, entityNames: string[] = []
     .replace(/(?:^|\n|\.\s+)\d+\.\s+/g, " ")
     .replace(/#\s*\d+\b/g, " ")
     .replace(/\bNo\.\s*\d+\b/gi, " ")
-    .replace(/\b(?:top|bottom|rank|ranked|priority|account|deal|item)\s*[-#]?\s*\d+\b/gi, " ")
-    .replace(/\b[A-Za-z]+[-_]\d+\b/g, " ")
-    .replace(/\b[A-Za-z]{2,}\d+\b/g, " ")
+    .replace(/\b(?:top|bottom|rank|ranked|priority)\s*[-#]?\s*\d+\b/gi, " ")
+    // Strip any alphanumeric identifiers that combine letters and digits (e.g. WOCOMPANY_010, C-012, DEAL_1)
+    .replace(/\b[A-Za-z0-9_-]*[A-Za-z]+[A-Za-z0-9_-]*\d+[A-Za-z0-9_-]*\b/g, " ")
     .replace(/\b\d+\s*:\s*\d+\b/g, " ");
 
   const matches = sanitized.match(
-    /(?:₹\s*|[-−]\s*)?[\d,]+(?:\.\d+)?(?:\s*(?:Cr|L|lakh|crore|%|k|M))?/gi
+    /(?:₹\s*|[-−]\s*)?[\d,]+(?:\.\d+)?(?:\s*(?:Crores?|crores?|Lakhs?|lakhs?|Lacs?|lacs?|Cr|cr|L|l|k|M|crore|lakh|%)\.?)?/gi
   );
   if (!matches) return [];
   return matches
@@ -62,24 +62,40 @@ export function extractNumbersFromProse(text: string, entityNames: string[] = []
  */
 export function parseTokenToNumber(token: string): number | null {
   const isNegative = token.includes("-") || token.includes("−");
-  const clean = token.replace(/[-−₹,\s]/g, "").toLowerCase();
+  let clean = token.replace(/[-−₹,\s]/g, "").toLowerCase();
+  if (clean.endsWith(".")) clean = clean.slice(0, -1);
   let v: number;
 
   if (clean.endsWith("%")) {
     v = parseFloat(clean.slice(0, -1));
     return isNaN(v) ? null : isNegative ? -v : v;
   }
-  if (clean.endsWith("cr") || clean.endsWith("crore")) {
-    v = parseFloat(clean.replace(/cr|crore/g, ""));
+  if (
+    clean.endsWith("cr") ||
+    clean.endsWith("crore") ||
+    clean.endsWith("crores") ||
+    clean.endsWith("crs")
+  ) {
+    v = parseFloat(clean.replace(/crores?|crs|cr/g, ""));
     return isNaN(v) ? null : (isNegative ? -v : v) * 10000000;
   }
-  if (clean.endsWith("l") || clean.endsWith("lakh")) {
-    v = parseFloat(clean.replace(/l|lakh/g, ""));
+  if (
+    clean.endsWith("l") ||
+    clean.endsWith("lakh") ||
+    clean.endsWith("lakhs") ||
+    clean.endsWith("lac") ||
+    clean.endsWith("lacs")
+  ) {
+    v = parseFloat(clean.replace(/lakhs?|lacs?|l/g, ""));
     return isNaN(v) ? null : (isNegative ? -v : v) * 100000;
   }
   if (clean.endsWith("k")) {
     v = parseFloat(clean.replace(/k/g, ""));
     return isNaN(v) ? null : (isNegative ? -v : v) * 1000;
+  }
+  if (clean.endsWith("m") || clean.endsWith("million")) {
+    v = parseFloat(clean.replace(/million|m/g, ""));
+    return isNaN(v) ? null : (isNegative ? -v : v) * 1000000;
   }
 
   v = parseFloat(clean);
@@ -121,6 +137,10 @@ export function validateNumericGrounding(
             Math.round(e.sharePct * 10) / 10,
             Math.round(e.sharePct)
           );
+          if (e.sharePct >= 5 && e.sharePct <= 95) {
+            const comp = 100 - e.sharePct;
+            factSheetNumbers.push(comp, Math.round(comp * 10) / 10, Math.round(comp));
+          }
         }
         if (typeof e.count === "number") {
           factSheetNumbers.push(e.count);
@@ -211,11 +231,14 @@ export function validateNumericGrounding(
   // Allow grounded arithmetic derivations (pairwise sums, differences, component shares,
   // multi-stage totals, and tax conversions) across verified monetary figures from the fact sheets.
   const monetaryValues = Array.from(
-    new Set(
-      factSheets
+    new Set([
+      ...factSheets
         .flatMap((fs) => (fs.numbers ? Object.values(fs.numbers) : []))
-        .filter((val): val is number => typeof val === "number" && Math.abs(val) >= 10000)
-    )
+        .filter((val): val is number => typeof val === "number" && Math.abs(val) >= 10000),
+      ...factSheets
+        .flatMap((fs) => (fs.entities || []).map((e) => e.value))
+        .filter((val): val is number => typeof val === "number" && Math.abs(val) >= 10000),
+    ])
   );
 
   for (let i = 0; i < monetaryValues.length; i++) {
