@@ -17,9 +17,10 @@ A hosted multi-agent conversational system that answers founder-level business q
 1. **Non-negotiable determinism rule** — LLMs decide _what_ to compute and _how to explain it_, but **never** perform arithmetic. Every figure comes from pure TypeScript in `lib/metrics/*.ts`, exposed as Zod-typed tools that return numbers together with rows scanned, assumptions applied, caveats triggered and the source row IDs behind the result.
 2. **Numeric grounding guard** — every prose output is validated by `lib/narrate/numeric-guard.ts` against the verified fact sheets. Any figure the guard cannot trace triggers a fallback to a deterministic table renderer. The guard fails safe: it may reject a truthful sentence, it never accepts an invented number.
 3. **Single normalization layer** — `lib/data/normalize.ts` repairs the real-world mess in one auditable pass (details below) and emits a `DataQualityReport` itemizing every correction.
-4. **Genuine multi-agent system** — a Supervisor delegates to five specialists through real LLM planning with a deterministic fallback; a Critic can send work **back to the Analyst for recomputation** (bounded to 2 revision passes and a wall-clock budget).
-5. **Indian fiscal year** — April–March boundaries matching the `SDPL/FY25-26/...` invoice convention; the as-of date is anchored to the dataset (default `2026-03-31`) so time-based questions behave identically for every reviewer.
-6. **Graceful degradation ladder** — fresh cache → live read → best-effort instance-local snapshot with its age stated → explicit "unavailable" warning. It never looks like a successful empty result.
+4. **Genuine multi-agent system** — a Supervisor delegates to specialists through real LLM planning with conversational short-circuits and deterministic fallback; a Critic can send work **back to the Analyst for recomputation** (bounded to 2 revision passes and a wall-clock budget).
+5. **In-app security & distributed rate limiting** — Edge middleware enforces strict 16 KB payload caps, anti-spoofing client IP resolution, CSRF defenses, distributed Upstash Redis sliding-window throttling (with automatic in-memory fallback), and distributed resync mutexes.
+6. **Indian fiscal year** — April–March boundaries matching the `SDPL/FY25-26/...` invoice convention; the as-of date is anchored to the dataset (default `2026-03-31`) so time-based questions behave identically for every reviewer.
+7. **Graceful degradation ladder** — fresh cache → live read → best-effort instance-local snapshot with its age stated → explicit "unavailable" warning. It never looks like a successful empty result.
 
 ---
 
@@ -66,6 +67,31 @@ The chat route streams **Server-Sent Events** (`data-source` → `trace`… → 
 ### Data normalization (the messy-data layer)
 
 The real sheets contain, and the layer repairs: embedded junk header rows ("Nezuko", "Bugs Bunny"); a **blank first row in the Work Orders sheet** (removed before import); the 100%-empty `Close Date (A)` column (excluded from all logic and reported); masked placeholder amounts ≈ ₹1 (classified as undisclosed, **excluded from every sum**, counted separately); date coercion across ISO / DD-MM-YYYY / Excel serials / month-name formats with impossible dates rejected and logical anomalies flagged (delivery before PO); free-text quantity parsing (`5360 HA`, `3956HA`, `2057 Acr`, `98000 Acres`, `40MW`, `24 Months`, `7 mines`, `NA`); "BIlled" → "Billed" canonicalization; negative amounts-to-be-billed flagged as **over-billed** rather than parse errors; status↔stage contradictions reconciled under a stated precedence rule (stage = funnel position, status = open/closed) with conflict counts surfaced; near-duplicates flagged, never silently dropped (e.g. COMPANY111 ×3 at identical value). Currency is INR throughout, formatted in ₹ lakh / crore.
+
+### 🛡️ Enterprise In-App Security & Anti-Abuse (`lib/security/guard.ts`, `middleware.ts`)
+
+- **Payload Bound Enforcement:** Strict 16 KB body limit (`isPayloadTooLarge`) halts oversized or malicious payloads before body parsing and LLM execution.
+- **Anti-Spoofing Client IP Resolution:** `getClientIp` traverses Cloudflare (`cf-connecting-ip`), trusted reverse proxies (`x-real-ip`), and validates IP format against forged or multi-hop `x-forwarded-for` strings.
+- **CSRF & Origin Defense:** `verifySameOrigin` defends state-modifying mutation endpoints (such as `/api/resync`) from cross-origin exploits while permitting authorized bearer admin credentials.
+- **Distributed Resync Lock:** `acquireDistributedResyncLock` leverages Redis `SET key NX EX 60` with process mutex fallbacks to prevent stampeding concurrent sync requests from consuming monday.com rate limits.
+- **Defense-in-Depth Headers:** Injects `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, and `X-XSS-Protection: 1; mode=block` across all API responses.
+
+### ⚡ Distributed Upstash Redis Rate Limiter (`lib/security/rate-limiter.ts`)
+
+- **Dual-Mode Operation:** Atomic sliding-window rate limiting using Upstash Redis REST pipeline (`INCR` + `EXPIRE` + `TTL`) with automatic fallback to an in-memory sliding-window log when offline or for unit tests.
+- **Route-Specific Velocity Thresholds:**
+  - `/api/chat` — 10 requests / 60s
+  - `/api/brief` — 5 requests / 60s
+  - `/api/resync` — 2 requests / 120s
+  - `/api/health` — 60 requests / 60s
+  - Default — 30 requests / 60s
+- **Standard Quota Telemetry:** Emits `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, `X-RateLimit-Source`, and `Retry-After` headers.
+
+### 📊 Real-Time Multi-Agent Telemetry & Conversational Fast Paths
+
+- **Conversational Short-Circuit:** Conversational queries (greetings, pleasantries, generic capability questions) bypass heavy multi-agent data-steward / analytics pipelines and respond instantly via `isConversationalQuery` while emitting full execution trace events.
+- **SSE Execution Stream:** Emits typed events (`data-source`, `trace`, `final`) detailing stage transitions, Critic re-analysis passes, and runtime data quality disclosures.
+- **Visual Telemetry Cards:** Renders dynamic telemetry visuals for pipeline distribution, revenue conversion, and concentration analysis alongside executive prose.
 
 ---
 
@@ -131,19 +157,23 @@ Generate the token in monday.com under **Avatar → Administration → API → P
 
 Copy `.env.example` → `.env.local`. Every variable and its behaviour when absent:
 
-| Variable                                                         | Required | Absent behaviour                                                                |
-| ---------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------- |
-| `MONDAY_API_TOKEN`                                               | ✅       | live reads refused with an explicit warning; cache/stale snapshots still served |
-| `MONDAY_DEALS_BOARD_ID`                                          | ✅       | same as above (`DEALS_BOARD_ID` also accepted for backwards compatibility)      |
-| `MONDAY_WORK_ORDERS_BOARD_ID`                                    | ✅       | same as above (`WORK_ORDERS_BOARD_ID` also accepted)                            |
-| `MONDAY_API_VERSION`                                             | –        | defaults to `2024-10`                                                           |
-| `MONDAY_DATA_SOURCE`                                             | –        | `graphql` (default) or `mcp`                                                    |
-| `MONDAY_MCP_SERVER_URL`                                          | –        | defaults to `https://mcp.monday.com/mcp`                                        |     | `GEMINI_API_KEY` / `GLM_API_KEY` / `GROQ_API_KEY` / `OPENROUTER_API_KEY` | –   | the agent runs the **deterministic degraded path** (router + template narration) and the health endpoint reports `degraded`; the failover chain is Gemini → GLM → Groq → OpenRouter, first configured provider wins (with no Gemini key the chain effectively starts at GLM) |
-| `GEMINI_MODEL` / `GLM_MODEL` / `GROQ_MODEL` / `OPENROUTER_MODEL` | –        | sensible per-provider defaults                                                  |
-| `AS_OF_DATE`                                                     | –        | `auto` (default) anchors to the dataset end, `2026-03-31`                       |
-| `CACHE_TTL_SECONDS`                                              | –        | defaults to `600`; invalid values fall back to it                               |
-| `LLM_TIMEOUT_MS`                                                 | –        | per-provider call timeout, default `12000`                                      |
-| `NEXT_PUBLIC_APP_NAME`                                           | –        | UI display name                                                                 |
+| Variable                                                                 | Required | Absent behaviour                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MONDAY_API_TOKEN`                                                       | ✅       | live reads refused with an explicit warning; cache/stale snapshots still served                                                                                                                                                                                              |
+| `MONDAY_DEALS_BOARD_ID`                                                  | ✅       | same as above (`DEALS_BOARD_ID` also accepted for backwards compatibility)                                                                                                                                                                                                   |
+| `MONDAY_WORK_ORDERS_BOARD_ID`                                            | ✅       | same as above (`WORK_ORDERS_BOARD_ID` also accepted)                                                                                                                                                                                                                         |
+| `MONDAY_API_VERSION`                                                     | –        | defaults to `2024-10`                                                                                                                                                                                                                                                        |
+| `MONDAY_DATA_SOURCE`                                                     | –        | `graphql` (default) or `mcp`                                                                                                                                                                                                                                                 |
+| `MONDAY_MCP_SERVER_URL`                                                  | –        | defaults to `https://mcp.monday.com/mcp`                                                                                                                                                                                                                                     |
+| `GEMINI_API_KEY` / `GLM_API_KEY` / `GROQ_API_KEY` / `OPENROUTER_API_KEY` | –        | the agent runs the **deterministic degraded path** (router + template narration) and the health endpoint reports `degraded`; the failover chain is Gemini → GLM → Groq → OpenRouter, first configured provider wins (with no Gemini key the chain effectively starts at GLM) |
+| `GEMINI_MODEL` / `GLM_MODEL` / `GROQ_MODEL` / `OPENROUTER_MODEL`         | –        | sensible per-provider defaults                                                                                                                                                                                                                                               |
+| `AS_OF_DATE`                                                             | –        | `auto` (default) anchors to the dataset end, `2026-03-31`                                                                                                                                                                                                                    |
+| `CACHE_TTL_SECONDS`                                                      | –        | defaults to `600`; invalid values fall back to it                                                                                                                                                                                                                            |
+| `LLM_TIMEOUT_MS`                                                         | –        | per-provider call timeout, default `12000`                                                                                                                                                                                                                                   |
+| `NEXT_PUBLIC_APP_NAME`                                                   | –        | UI display name                                                                                                                                                                                                                                                              |
+| `UPSTASH_REDIS_REST_URL`                                                 | –        | Upstash Redis REST endpoint for distributed rate limiting; falls back to in-memory store if absent                                                                                                                                                                           |
+| `UPSTASH_REDIS_REST_TOKEN`                                               | –        | Upstash Redis REST bearer token                                                                                                                                                                                                                                              |
+| `ADMIN_API_KEY`                                                          | –        | Optional bearer token for administrative bypass & resync locking                                                                                                                                                                                                             |
 
 Secrets never enter the repo: `.env.local` is git-ignored, CI runs gitleaks, and provider error strings never echo request bodies (which contain keys).
 
@@ -175,17 +205,18 @@ GitHub Actions (`.github/workflows/ci.yml`) gates every push and PR: secret scan
 
 ```bash
 npm run validate          # typecheck + lint + format:check + tests
-npm run test:coverage     # 137 tests, thresholds: 75% lines/functions/statements, 60% branches
+npm run test:coverage     # 140 tests, thresholds: 75% lines/functions/statements, 60% branches
 npm run build             # production build
 npm run smoke:test        # deployment smoke test (set SMOKE_TEST_URL)
 ```
 
-**Current state: 137 tests across 16 suites, all green.** Highlights:
+**Current state: 140 tests across 16 suites, all green.** Highlights:
 
 - `determinism.test.ts` — 1,000 repeated runs of the metric core produce **identical golden numbers (zero variance)**.
 - `normalizer.test.ts` — every repair rule reproduces a real defect found in the supplied data.
 - `metrics.test.ts` / `golden-answers.test.ts` — fixed tool inputs always yield identical outputs.
 - `agent-behaviour.test.ts` — supervisor delegation, Analyst self-correction on empty filters, Critic send-back loops terminate within budget.
+- `security.test.ts` — sliding-window rate limit boundaries, client quota isolation, window replenishment, 16 KB payload limit enforcement, IP header sanitization, and distributed resync lock behavior.
 - `graphql-transport.test.ts` / `factory-and-router.test.ts` / `resilience.test.ts` — transport error mapping, GraphQL/MCP switching, the degradation ladder, LLM provider failover, and the degraded router's grounding. All tests are hermetic: fetch and data sources are injected, nothing touches the network.
 
 _Known slowness:_ the transport tests exercise the real exponential-backoff ladder (~15–20s per failed-call test), which is why the suite takes ~20s in total.
@@ -244,6 +275,6 @@ _Known slowness:_ the transport tests exercise the real exponential-backoff ladd
 
 ## 🗺️ Status — completed vs remaining
 
-**Completed:** live monday.com GraphQL + MCP transports with runtime schema discovery and cursor pagination; single normalization layer with a full data-quality report; 8 deterministic metric tools; multi-agent loop (Supervisor / Data Steward / Clarifier / Planner / Analyst / Narrator / Critic) with LLM planning and deterministic fallback; numeric grounding guard; SSE-streamed trace panel; staleness banners and data-health modal; Exec Brief with copy/download/print; 137 hermetic tests across 16 suites with coverage gates; CI/CD with secret scanning and a deployment smoke test; Vercel deployment; README and DECISION_LOG.
+**Completed:** live monday.com GraphQL + MCP transports with runtime schema discovery and cursor pagination; single normalization layer with a full data-quality report; 8 deterministic metric tools; multi-agent loop (Supervisor / Data Steward / Clarifier / Planner / Analyst / Narrator / Critic) with LLM planning, conversational intent short-circuit, and deterministic fallback; numeric grounding guard; SSE-streamed trace panel with visual telemetry charts; enterprise in-app security layer (16 KB payload limit, anti-spoofing IP resolution, CSRF protection, distributed resync lock); distributed Upstash Redis sliding-window rate limiter with in-memory fallback; staleness banners and data-health modal; Exec Brief with copy/download/print; 140 hermetic tests across 16 suites with coverage gates; CI/CD with secret scanning and a deployment smoke test; Vercel deployment; README and DECISION_LOG.
 
 **Remaining (with more time):** durable snapshot store; voice agent interface; richer Analyst tool-calling loop; scheduled live-board integration test; golden transcripts from the deployed URL.
