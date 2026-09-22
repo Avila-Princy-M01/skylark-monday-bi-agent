@@ -28,12 +28,19 @@ export interface LlmProviderName {
   baseURL: string;
 }
 
+export interface JevConfig {
+  apiKey: string;
+  baseURL: string;
+  modelName: string;
+}
+
 export interface AppConfig {
   monday: MondayConfig;
   cacheTtlSeconds: number;
   asOfDate: string;
   llmChain: LlmProviderName[];
   llmTimeoutMs: number;
+  jev: JevConfig;
 }
 
 /** Reads the first non-empty value among the provided env var names, stripping quotes and redundant Bearer prefixes. */
@@ -154,6 +161,19 @@ export function getLlmProviderChain(): LlmProviderName[] {
   return chain;
 }
 
+export function getJevConfig(): JevConfig {
+  return {
+    apiKey: firstEnv("JEV_API_KEY", "TYPESAFE_API_KEY"),
+    baseURL: firstEnv("JEV_BASE_URL") || "https://api.typesafe.ai/v1",
+    modelName: firstEnv("JEV_MODEL") || "jev-latest",
+  };
+}
+
+export function isJevConfigured(config: JevConfig = getJevConfig()): boolean {
+  if (isTestEnvironment()) return false;
+  return Boolean(config.apiKey);
+}
+
 export function getConfig(): AppConfig {
   return {
     monday: getMondayConfig(),
@@ -161,6 +181,7 @@ export function getConfig(): AppConfig {
     asOfDate: getAsOfDate(),
     llmChain: getLlmProviderChain(),
     llmTimeoutMs: Number(firstEnv("LLM_TIMEOUT_MS")) || 20000,
+    jev: getJevConfig(),
   };
 }
 
