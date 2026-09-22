@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { completeJson, isLlmAvailable } from "../llm/client";
+import { jevChoice, isJevConfigured } from "../jev/client";
 import { METRIC_TOOL_NAMES, MetricToolName } from "../tools/registry";
 import { resolveSectorQuery, KNOWN_CANONICAL_SECTORS } from "../query/aliases";
 import { resolveDateWindow, DateWindow } from "../query/fiscal";
+import { JevConfig } from "../config";
 import { AgentTraceStep } from "./types";
 
 /**
@@ -23,7 +25,7 @@ const PlanSchema = z.object({
   rationale: z.string().nullish(),
 });
 
-export type AnalystPlanSource = "llm" | "deterministic";
+export type AnalystPlanSource = "jev" | "llm" | "deterministic";
 
 export interface AnalystPlan {
   primaryTool: MetricToolName;
@@ -173,6 +175,10 @@ export interface PlanOptions {
   disableLlm?: boolean;
   /** Prior conversation turns, so follow-ups inherit the earlier intent. */
   history?: Array<{ role: "user" | "assistant"; content: string }>;
+  /** Test seam: lets tests inject a mocked fetch. */
+  fetchImpl?: typeof fetch;
+  /** Test seam: lets tests inject a custom Jev config. */
+  jevConfig?: JevConfig;
 }
 
 export async function createAnalystPlan(
@@ -185,7 +191,49 @@ export async function createAnalystPlan(
   let plan = deterministic;
   let llmWarning: string | undefined;
 
-  if (!options.disableLlm && isLlmAvailable()) {
+  // 1. First preference: Jev System-1 Calibrated Decision Engine (if configured)
+  const jevConfigured = options.jevConfig ? Boolean(options.jevConfig.apiKey) : isJevConfigured();
+  if (!options.disableLlm && jevConfigured) {
+    try {
+      const jevChoiceResult = await jevChoice(
+        {
+          query,
+          context: "Select the single primary metric tool that directly answers this query.",
+        },
+        "primaryTool",
+        `Which deterministic metric tool is the primary tool needed to answer: "${query}"?`,
+        METRIC_TOOL_NAMES,
+        { fetchImpl: options.fetchImpl, config: options.jevConfig }
+      );
+
+      if (jevChoiceResult && METRIC_TOOL_NAMES.includes(jevChoiceResult.choice)) {
+        const sectorAlias = resolveSectorQuery(query);
+        const matchedSectors =
+          sectorAlias.matchedSectors.length > 0 ? sectorAlias.matchedSectors : undefined;
+
+        // Populate supporting tools aligned with the deterministic topology
+        const defaultSupporting = deterministic.supportingTools.filter(
+          (t) => t !== jevChoiceResult.choice
+        );
+
+        plan = {
+          primaryTool: jevChoiceResult.choice,
+          supportingTools: defaultSupporting,
+          sectors: matchedSectors,
+          timeExpression: undefined,
+          rationale: `Selected by Jev System-1 decision model (confidence: ${(
+            jevChoiceResult.confidence * 100
+          ).toFixed(0)}%).`,
+          source: "jev",
+        };
+      }
+    } catch (err) {
+      console.warn("[Planner] Jev decision failed, falling back to LLM chain:", err);
+    }
+  }
+
+  // 2. Second preference: LLM Provider Chain (Gemini / GLM / Groq / OpenRouter) if Jev wasn't used
+  if (plan.source === "deterministic" && !options.disableLlm && isLlmAvailable()) {
     const history = options.history ?? [];
     const historyBlock =
       history.length > 0
@@ -221,7 +269,7 @@ export async function createAnalystPlan(
       llmWarning =
         "Every configured LLM provider failed during planning; fell back to the deterministic keyword router.";
     }
-  } else if (!options.disableLlm) {
+  } else if (!options.disableLlm && plan.source === "deterministic" && !isJevConfigured()) {
     llmWarning = "No LLM provider key configured; planner ran the deterministic keyword router.";
   }
 
@@ -232,9 +280,11 @@ export async function createAnalystPlan(
     id: `trace_planner_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     role: "supervisor",
     title:
-      plan.source === "llm"
-        ? "Supervisor delegated tool selection to the LLM planner"
-        : "Supervisor used the deterministic planner",
+      plan.source === "jev"
+        ? "Supervisor delegated tool selection to Jev System-1 decision model"
+        : plan.source === "llm"
+          ? "Supervisor delegated tool selection to the LLM planner"
+          : "Supervisor used the deterministic planner",
     timestamp: new Date().toISOString(),
     content:
       `${plan.rationale} Primary=${plan.primaryTool}` +

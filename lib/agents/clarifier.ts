@@ -2,6 +2,8 @@ import { z } from "zod";
 import { ClarifierVerdict, AgentTraceStep } from "./types";
 import { resolveSectorQuery } from "../query/aliases";
 import { completeJson, isLlmAvailable } from "../llm/client";
+import { jevNoul, isJevConfigured } from "../jev/client";
+import { JevConfig } from "../config";
 
 /**
  * The Clarifier decides whether a question can be answered as asked.
@@ -49,7 +51,7 @@ Respond with raw JSON only, no prose and no markdown fences:
 
 When isAmbiguous is true, supply 2-4 options, each with a short "label", a snake_case "value", and a plain-English "explanation".`;
 
-const REVENUE_DEFINITION_OPTIONS: ClarifierVerdict["options"] = [
+const REVENUE_DEFINITION_OPTIONS: NonNullable<ClarifierVerdict["options"]> = [
   {
     label: "Contracted Order Book Value (Excl. GST)",
     value: "contracted",
@@ -151,6 +153,10 @@ export interface LlmClarifierOptions {
   disableLlm?: boolean;
   /** Prior conversation turns, so follow-up answers aren't re-clarified. */
   history?: Array<{ role: "user" | "assistant"; content: string }>;
+  /** Test seam: lets tests inject a mocked fetch. */
+  fetchImpl?: typeof fetch;
+  /** Test seam: lets tests inject a custom Jev config. */
+  jevConfig?: JevConfig;
 }
 
 /**
@@ -163,6 +169,61 @@ export async function runClarifierWithLlm(
   options: LlmClarifierOptions = {}
 ): Promise<{ verdict: ClarifierVerdict; trace: AgentTraceStep }> {
   const deterministic = runClarifier(query);
+
+  // 1. First preference: Jev System-1 Decision Engine (sub-50ms ambiguity check)
+  const jevConfigured = options.jevConfig ? Boolean(options.jevConfig.apiKey) : isJevConfigured();
+  if (!options.disableLlm && jevConfigured) {
+    try {
+      const jevDecision = await jevNoul(
+        {
+          query,
+          context:
+            "Revenue is ambiguous if asking generic revenue without specifying contracted vs billed vs collected. Specific metric questions or conversion chains are NOT ambiguous.",
+        },
+        "isAmbiguous",
+        `Is this business intelligence question materially ambiguous about revenue definitions or parameters: "${query}"?`,
+        { fetchImpl: options.fetchImpl, config: options.jevConfig }
+      );
+
+      if (jevDecision) {
+        const wantsToAsk = jevDecision.result;
+        const verdict: ClarifierVerdict = {
+          isAmbiguous: wantsToAsk,
+          question: wantsToAsk ? "Which revenue metric should we analyze?" : undefined,
+          options: wantsToAsk ? REVENUE_DEFINITION_OPTIONS : undefined,
+          assumptions: deterministic.verdict.assumptions,
+        };
+
+        const trace: AgentTraceStep = {
+          id: `trace_clarifier_jev_${Date.now()}`,
+          role: "clarifier",
+          title: "Clarifier Ambiguity & Intent Resolution (Jev System-1)",
+          timestamp: new Date().toISOString(),
+          content: wantsToAsk
+            ? `Jev System-1 flagged the question as ambiguous (confidence: ${(
+                jevDecision.confidence * 100
+              ).toFixed(
+                0
+              )}%) and proposed ${REVENUE_DEFINITION_OPTIONS.length} disambiguation options.`
+            : `Jev System-1 judged the question answerable as asked (confidence: ${(
+                jevDecision.confidence * 100
+              ).toFixed(0)}%) under ${verdict.assumptions.length} stated assumptions.`,
+          status: "completed",
+          metadata: {
+            isAmbiguous: wantsToAsk,
+            assumptionsCount: verdict.assumptions.length,
+            provider: "jev",
+            model: "jev-latest",
+            mode: "jev_system1",
+          },
+        };
+
+        return { verdict, trace };
+      }
+    } catch (err) {
+      console.warn("[Clarifier] Jev decision failed, falling back to LLM chain:", err);
+    }
+  }
 
   if (options.disableLlm || !isLlmAvailable()) {
     return deterministic;
