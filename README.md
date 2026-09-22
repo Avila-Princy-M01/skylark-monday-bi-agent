@@ -33,12 +33,12 @@ User query ──► POST /api/chat (SSE stream)
            [Supervisor] ──────────── owns budgets, streams every step to the UI
                    │
                    ├─► [Data Steward]  freshness, schema and data-quality audit
-                   ├─► [Clarifier]     ambiguity verdict → quick-reply chips or stated assumptions
-                   ├─► [Planner]       LLM selects which deterministic tools to run (Zod-validated;
+                   ├─► [Clarifier]     System-1 Jev Noul decision (<50ms) / LLM → quick-reply chips or stated assumptions
+                   ├─► [Planner]       System-1 Jev choice / LLM selects which deterministic tools to run (Zod-validated;
                    │                   unknown tool ⇒ deterministic router). NEVER produces a number.
                    ├─► [Analyst]       executes the metric toolbelt, inspects outputs,
                    │                   self-corrects on empty filters (alias retry, wider window)
-                   ├─► [Narrator]      founder-grade prose strictly from the verified fact sheet
+                   ├─► [Narrator]      Gemini / LLM failover chain: executive prose strictly from verified fact sheets
                    └─► [Critic]        verifies grounding + completeness;
                                        may send the Analyst BACK for recompute (max 2 passes)
                                        before the final write-up is served
@@ -165,6 +165,9 @@ Copy `.env.example` → `.env.local`. Every variable and its behaviour when abse
 | `MONDAY_API_VERSION`                                                     | –        | defaults to `2024-10`                                                                                                                                                                                                                                                        |
 | `MONDAY_DATA_SOURCE`                                                     | –        | `graphql` (default) or `mcp`                                                                                                                                                                                                                                                 |
 | `MONDAY_MCP_SERVER_URL`                                                  | –        | defaults to `https://mcp.monday.com/mcp`                                                                                                                                                                                                                                     |
+| `JEV_API_KEY`                                                            | –        | TypeSafe AI API key; activates sub-50ms System-1 calibrated decision routing in Planner & Clarifier. When omitted, agents gracefully fall back to Gemini / LLM prompt chain.                                                                                                 |
+| `JEV_BASE_URL`                                                           | –        | defaults to `https://api.typesafe.ai/v1`                                                                                                                                                                                                                                     |
+| `JEV_MODEL`                                                              | –        | defaults to `jev-latest` (supports `typesafe/jev-latest` and versioned models like `jev-1.13.0`)                                                                                                                                                                             |
 | `GEMINI_API_KEY` / `GLM_API_KEY` / `GROQ_API_KEY` / `OPENROUTER_API_KEY` | –        | the agent runs the **deterministic degraded path** (router + template narration) and the health endpoint reports `degraded`; the failover chain is Gemini → GLM → Groq → OpenRouter, first configured provider wins (with no Gemini key the chain effectively starts at GLM) |
 | `GEMINI_MODEL` / `GLM_MODEL` / `GROQ_MODEL` / `OPENROUTER_MODEL`         | –        | sensible per-provider defaults                                                                                                                                                                                                                                               |
 | `AS_OF_DATE`                                                             | –        | `auto` (default) anchors to the dataset end, `2026-03-31`                                                                                                                                                                                                                    |
@@ -205,13 +208,14 @@ GitHub Actions (`.github/workflows/ci.yml`) gates every push and PR: secret scan
 
 ```bash
 npm run validate          # typecheck + lint + format:check + tests
-npm run test:coverage     # 140 tests, thresholds: 75% lines/functions/statements, 60% branches
+npm run test:coverage     # 146 tests, thresholds: 75% lines/functions/statements, 60% branches
 npm run build             # production build
 npm run smoke:test        # deployment smoke test (set SMOKE_TEST_URL)
 ```
 
-**Current state: 140 tests across 16 suites, all green.** Highlights:
+**Current state: 146 tests across 17 suites, all green.** Highlights:
 
+- `jev.test.ts` — validates Jev System-1 choice/noul API calls, calibrated confidence resolution, HTTP failure degradation, and agent orchestration.
 - `determinism.test.ts` — 1,000 repeated runs of the metric core produce **identical golden numbers (zero variance)**.
 - `normalizer.test.ts` — every repair rule reproduces a real defect found in the supplied data.
 - `metrics.test.ts` / `golden-answers.test.ts` — fixed tool inputs always yield identical outputs.
@@ -275,6 +279,6 @@ _Known slowness:_ the transport tests exercise the real exponential-backoff ladd
 
 ## 🗺️ Status — completed vs remaining
 
-**Completed:** live monday.com GraphQL + MCP transports with runtime schema discovery and cursor pagination; single normalization layer with a full data-quality report; 8 deterministic metric tools; multi-agent loop (Supervisor / Data Steward / Clarifier / Planner / Analyst / Narrator / Critic) with LLM planning, conversational intent short-circuit, and deterministic fallback; numeric grounding guard; SSE-streamed trace panel with visual telemetry charts; enterprise in-app security layer (16 KB payload limit, anti-spoofing IP resolution, CSRF protection, distributed resync lock); distributed Upstash Redis sliding-window rate limiter with in-memory fallback; staleness banners and data-health modal; Exec Brief with copy/download/print; 140 hermetic tests across 16 suites with coverage gates; CI/CD with secret scanning and a deployment smoke test; Vercel deployment; README and DECISION_LOG.
+**Completed:** live monday.com GraphQL + MCP transports with runtime schema discovery and cursor pagination; single normalization layer with a full data-quality report; 8 deterministic metric tools; hybrid System-1 / System-2 multi-agent loop (Supervisor / Data Steward / Clarifier / Planner / Analyst / Narrator / Critic) with Jev API (`jev-latest`) calibrated decision routing, LLM planning, conversational intent short-circuit, and deterministic fallback; numeric grounding guard; SSE-streamed trace panel with visual telemetry charts; enterprise in-app security layer (16 KB payload limit, anti-spoofing IP resolution, CSRF protection, distributed resync lock); distributed Upstash Redis sliding-window rate limiter with in-memory fallback; staleness banners and data-health modal; Exec Brief with copy/download/print; 146 hermetic tests across 17 suites with coverage gates; CI/CD with secret scanning and a deployment smoke test; Vercel deployment; README and DECISION_LOG.
 
 **Remaining (with more time):** durable snapshot store; voice agent interface; richer Analyst tool-calling loop; scheduled live-board integration test; golden transcripts from the deployed URL.
